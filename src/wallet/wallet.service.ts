@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 let ellipticcurve = require("starkbank-ecdsa");
-const keccak256 = require('keccak256')
+import keccak256 from 'keccak256';
 let Ecdsa = ellipticcurve.Ecdsa;
 let PrivateKey = ellipticcurve.PrivateKey;
 @Injectable()

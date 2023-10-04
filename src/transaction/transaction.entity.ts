@@ -6,10 +6,10 @@ export class TransactionEntity{
     id:string;
 
     @Column()
-    sourceAccount:string;
+    senderAddress:string;
 
     @Column()
-    destinationAccount:string;
+    receiverAddress:string;
 
     @Column()
     coin:string;

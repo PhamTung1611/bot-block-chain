@@ -19,7 +19,7 @@ export class UsersService {
 
     async findOneUser(address: string) {
         const User = await this.userRepository.findOne({
-            where: { address: address }
+            where: { id_user: address }
         });
         if (User) {
             return true;
@@ -28,26 +28,26 @@ export class UsersService {
         }
     }
 
-    async updateMoney(address: string, money: number) {
-        const checkUser = await this.userRepository.findOne({
-            where: {
-                address: address
-            }
-        })
-        if (checkUser && Number(money) > 0) {
-            const coin = Number(Number(checkUser.coin) + Number(money));
-            await this.userRepository.update(checkUser.id, { coin: String(coin) });
-            return true;
-        } else {
-            return false;
-        }
-    }
+    // async updateMoney(address: string, money: number) {
+    //     const checkUser = await this.userRepository.findOne({
+    //         where: {
+    //             address: address
+    //         }
+    //     })
+    //     if (checkUser && Number(money) > 0) {
+    //         const coin = Number(Number(checkUser.coin) + Number(money));
+    //         await this.userRepository.update(checkUser.id, { coin: String(coin) });
+    //         return true;
+    //     } else {
+    //         return false;
+    //     }
+    // }
 
-    async checkInformation(address:string):Promise<UserEntity>{
-        return await this.userRepository.findOne({where:{
-            address:address
-        }});
+    // async checkInformation(address:string):Promise<UserEntity>{
+    //     return await this.userRepository.findOne({where:{
+    //         address:address
+    //     }});
 
-    }
+    // }
 
 }

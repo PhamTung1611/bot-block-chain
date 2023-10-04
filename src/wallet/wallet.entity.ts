@@ -1,5 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
-
+import { Entity, Column, PrimaryGeneratedColumn, BeforeInsert } from 'typeorm';
+import { v4 as uuid } from 'uuid';
 @Entity()
 export class WalletEntity {
     @PrimaryGeneratedColumn('uuid')
@@ -20,4 +20,8 @@ export class WalletEntity {
     @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
     create_date: Date;
 
+    @BeforeInsert()
+    generateUUID() {
+      this.id = uuid();
+    }
 }

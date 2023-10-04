@@ -7,7 +7,6 @@ import { TelegramModule } from './telegram/telegram.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { UserEntity } from './users/users.entity';
 import { TransactionEntity } from './transaction/transaction.entity';
-import { WalletService } from './wallet/wallet.service';
 import { WalletModule } from './wallet/wallet.module';
 
 @Module({
@@ -23,6 +22,6 @@ import { WalletModule } from './wallet/wallet.module';
     synchronize: true, // Đồng bộ hóa cơ sở dữ liệu với các entity
   }), UsersModule, TelegramModule, TransactionModule, WalletModule],
   controllers: [AppController],
-  providers: [AppService, WalletService],
+  providers: [AppService],
 })
 export class AppModule {}

@@ -12,9 +12,11 @@ export class WalletService {
         @InjectRepository(WalletEntity) private readonly walletRepository: Repository<WalletEntity>,
     ) { }
     async generateNewWallet(): Promise<any> {
-        let privateKey = new PrivateKey().toString();
-        let publicKey = privateKey.publicKey().toString();
+        let privateKeyGen = new PrivateKey();
+        let privateKey =privateKeyGen.toString('hex');
+        let publicKey = privateKeyGen.publicKey().toString('hex');
         let address = keccak256(publicKey).toString('hex')
+        console.log(privateKey)
         const wallet = new WalletEntity();
         wallet.privateKey = privateKey;
         wallet.address = address;

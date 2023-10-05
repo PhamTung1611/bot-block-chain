@@ -82,4 +82,13 @@ export class WalletService {
         
             return checkUser.address;
     }
+
+    async checkInformation(id:string){
+        const user = await this.walletRepository.findOne({
+            where:{
+                id_user:id
+            }
+        })
+        return user;
+    }
 }

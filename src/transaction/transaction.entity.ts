@@ -12,7 +12,7 @@ export class TransactionEntity{
     receiverAddress:string;
 
     @Column()
-    coin:string;
+    balance:string;
 
     @Column()
     type:string;

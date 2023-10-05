@@ -3,6 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 
+let crypto = require("crypto");
+let ethers = require('ethers');
+let Wallet = require('ethereumjs-wallet').default
+let EthUtil = require("ethereumjs-util");
+
 @Injectable()
 export class WalletService {
     constructor(@InjectRepository(WalletEntity) private readonly walletRepository: Repository<WalletEntity>) { }
@@ -17,4 +22,64 @@ export class WalletService {
         }
     }
 
+    async generateNewWallet() {
+        let id = crypto.randomBytes(32).toString('hex');
+            let privateKey = "0x" + id;
+            const privateKeyBuffer = EthUtil.toBuffer(privateKey);
+    
+            const wallet = Wallet.fromPrivateKey(privateKeyBuffer);
+            
+            const publicKeyBuffer = wallet.getPublicKey();
+            
+            const publicKey = EthUtil.bufferToHex(publicKeyBuffer);
+            const address = wallet.getAddressString();
+            
+            const createWallet = {
+              privateKey:privateKey,
+              publicKey:publicKey,
+              address:address,
+            }
+            // console.log(
+            //   createWallet
+            // );
+            
+        return createWallet;
+          
+      }
+
+      async findOneUser(id_user: string) {
+        const User = await this.walletRepository.findOne({
+            where: { id_user: id_user }
+        });
+        if (User) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    async updateMoney(id_user: string, money: number) {
+        const checkUser = await this.walletRepository.findOne({
+            where: {
+                id_user: id_user
+            }
+        })
+        if (checkUser && Number(money) > 0) {
+            const coin = Number(Number(checkUser.balance) + Number(money));
+            await this.walletRepository.update(checkUser.id, { balance: String(coin) });
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    async checkAddress(id_user: string){
+        const checkUser = await this.walletRepository.findOne({
+            where: {
+                id_user: id_user
+            }
+        })
+        
+            return checkUser.address;
+    }
 }

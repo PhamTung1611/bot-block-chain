@@ -65,11 +65,6 @@ export class TelegramService {
             await ctx.reply(`Xin chào ${options.username}, tôi có thể giúp gì cho bạn!`, this.keyboardMarkup)
         }
 
-
-
-        // await ctx.reply(`Xin chào ${options.username}, tôi có thể giúp gì cho bạn!`, this.keyboardMarkup);
-
-
     }
 
     async handleMessage(msg: any) {
@@ -86,8 +81,6 @@ export class TelegramService {
                 'Xin lỗi, tôi không hiểu. Vui lòng thử lại', this.keyboardMarkup,
             );
         }
-        
-
 
         switch (data.action) {
             case 'deposit':
@@ -170,9 +163,6 @@ export class TelegramService {
 
         switch (options.data) {
             case 'create':
-                // if (!checkUser) {
-                //     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
-                // }
                 if (data.action === '') {
                     if (!checkUser) {
                         const wallet = await this.wallerService.generateNewWallet();
@@ -194,7 +184,6 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id)
                 }
                 break;
-
 
             case 'deposit':
                 if (!checkUser) {
@@ -244,8 +233,7 @@ export class TelegramService {
                     break;
             default:
                 await this.cacheManager.del(options.user_id);
-                await msg.reply(`Xin lỗi tôi không hiểu`);
-                await msg.reply('Tôi chỉ thực hiện được như bên dưới thôi!', this.keyboardMarkup);
+                await msg.reply(`Xin lỗi tôi không hiểu`,this.keyboardMarkup);
                 break;
         }
     }

@@ -19,7 +19,7 @@ import { WalletEntity } from './wallet/wallet.entity';
     password: '1611', // Mật khẩu PostgreSQL
     database: 'BlockChainBot', // Tên cơ sở dữ liệu PostgreSQL
     // entities: [__dirname + '/**/*.entity{.ts,.js}'],
-    entities: [UserEntity,TransactionEntity,WalletEntity],
+    entities: [TransactionEntity,WalletEntity],
     synchronize: true, // Đồng bộ hóa cơ sở dữ liệu với các entity
   }), UsersModule, TelegramModule, TransactionModule, WalletModule],
   controllers: [AppController],

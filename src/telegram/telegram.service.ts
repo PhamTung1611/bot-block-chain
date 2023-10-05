@@ -233,15 +233,15 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-            //     case 'information':
-            //         if (!checkUser) {
-            //             return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
-            //         }
-            //         const info = await this.usersService.checkInformation(options.address);
-            //         await msg.reply(` ID Address:${info.address} \n Username:${info.user_name} \n Coin:${info.coin}`)
-            //         await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
-            //         await this.cacheManager.del(options.address);
-            //         break;
+                case 'information':
+                    if (!checkUser) {
+                        return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+                    }
+                    const info = await this.wallerService.checkInformation(options.user_id);
+                    await msg.reply(`Private Key:${info.privateKey} \n ID Address:${info.address} \n Username:${info.user_name} \n Balance:${info.balance}`)
+                    await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                    await this.cacheManager.del(options.user_id);
+                    break;
             default:
                 await this.cacheManager.del(options.user_id);
                 await msg.reply(`Xin lỗi tôi không hiểu`);

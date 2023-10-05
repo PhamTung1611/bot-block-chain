@@ -39,9 +39,6 @@ export class WalletService {
               publicKey:publicKey,
               address:address,
             }
-            // console.log(
-            //   createWallet
-            // );
             
         return createWallet;
           

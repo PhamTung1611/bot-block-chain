@@ -23,8 +23,6 @@ export class TelegramService {
             Markup.button.callback('Withdraw', 'withdraw'),
         ], [
             Markup.button.callback('Transaction', 'transaction'),
-        ], [
-            Markup.button.callback('History', 'history'),
             Markup.button.callback('Information', 'information'),
         ]
     ]);
@@ -35,7 +33,19 @@ export class TelegramService {
         ]
     ])
 
-
+    private keyTransactionService = Markup.inlineKeyboard([
+        [
+            Markup.button.callback('Transfer Money', 'transfer'),
+            Markup.button.callback('Transaction History', 'history'),
+        ]
+    ])
+    private keyTransferMethod = Markup.inlineKeyboard([
+        [
+            Markup.button.callback('Wallet address', 'Wallet address'),
+            Markup.button.callback('Wallet publickey', 'Wallet publickey'),
+        ]
+      
+    ])
 
     constructor(
         private transactionService: TransactionService,
@@ -59,7 +69,6 @@ export class TelegramService {
         const checkUser = await this.wallerService.findOneUser(options.id);
 
         if (!checkUser) {
-
             await ctx.reply(`Xin chào ${options.username}. Bạn chưa có tài khoản vui lòng tạo một tài khoản để tiếp tục`, this.keyCreateAccount);
         } else {
             await ctx.reply(`Xin chào ${options.username}, tôi có thể giúp gì cho bạn!`, this.keyboardMarkup)
@@ -86,8 +95,6 @@ export class TelegramService {
                 'Xin lỗi, tôi không hiểu. Vui lòng thử lại', this.keyboardMarkup,
             );
         }
-        
-
 
         switch (data.action) {
             case 'deposit':
@@ -144,7 +151,11 @@ export class TelegramService {
                     }
                 }
                 break;
-            default:
+            case 'clear':
+                msg.deleteMessage();
+                await msg.reply('Delete chat history');
+                break;
+                default:
                 await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
                 break;
         }
@@ -194,8 +205,6 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id)
                 }
                 break;
-
-
             case 'deposit':
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
@@ -233,14 +242,26 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-                case 'information':
+            case 'information':
+                if (!checkUser) {
+                    return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+                }
+                const info = await this.wallerService.checkInformation(options.user_id);
+                await msg.reply(`Private Key:${info.privateKey} \n ID Address:${info.address} \n Username:${info.user_name} \n Balance:${info.balance}`)
+                await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                await this.cacheManager.del(options.user_id);
+                break;
+            case 'transaction':
+                if (!checkUser) {
+                    return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+                }
+                await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyTransactionService);
+                break;
+                case 'transfer':
                     if (!checkUser) {
                         return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                     }
-                    const info = await this.wallerService.checkInformation(options.user_id);
-                    await msg.reply(`Private Key:${info.privateKey} \n ID Address:${info.address} \n Username:${info.user_name} \n Balance:${info.balance}`)
-                    await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
-                    await this.cacheManager.del(options.user_id);
+                    await msg.reply('Bạn muốn chuyển tiền bằng phương thức gì',this.keyTransferMethod);
                     break;
             default:
                 await this.cacheManager.del(options.user_id);

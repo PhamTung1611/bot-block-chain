@@ -167,6 +167,28 @@ export class WalletService {
         return WalletStatus.FOUND
 
     }
+    async getAddressById(id_user: string) {
+        const checkUser = await this.walletRepository.findOne({
+            where: {
+                id_user: id_user
+            }
+        })
+        if(!checkUser){
+            return WalletStatus.NOT_FOUND;
+        }
+        return checkUser.address;
+    }
+    async getAddressByPublicKey(publicKey: string) {
+        const checkUser = await this.walletRepository.findOne({
+            where: {
+                publicKey: publicKey
+            }
+        })
+        if(!checkUser){
+            return WalletStatus.NOT_FOUND;
+        }
+        return checkUser.address;
+    }
     async checkInformation(id: string) {
         const user = await this.walletRepository.findOne({
             where: {

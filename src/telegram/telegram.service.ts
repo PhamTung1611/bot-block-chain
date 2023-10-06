@@ -1,18 +1,19 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { UsersService } from 'src/users/users.service';
 import { Markup, Telegraf } from 'telegraf';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { TransactionService } from 'src/transaction/transaction.service';
-import * as bcrypt from 'bcrypt';
 import { WalletService } from 'src/wallet/wallet.service';
 import { WalletStatus } from 'src/wallet/wallet.status.enum';
+import { Button } from './enum/button.enum';
+import { Action } from './enum/action.enum';
 
 interface DataCache {
     action: string;
     step: number;
     money: string;
     receiver?: string;
+    sender?: string;
 }
 
 @Injectable()
@@ -20,36 +21,36 @@ export class TelegramService {
     private bot: Telegraf;
     private keyboardMarkup = Markup.inlineKeyboard([
         [
-            Markup.button.callback('Deposit', 'deposit'),
-            Markup.button.callback('Withdraw', 'withdraw'),
+            Markup.button.callback('Deposit', Button.DEPOSIT),
+            Markup.button.callback('Withdraw', Button.WITHDRAW),
         ], [
-            Markup.button.callback('Transaction', 'transaction'),
-            Markup.button.callback('Information', 'information'),
+            Markup.button.callback('Transaction', Button.TRANSACTION),
+            Markup.button.callback('Information', Button.INFORMATION),
         ]
     ]);
 
     private keyCreateAccount = Markup.inlineKeyboard([
         [
-            Markup.button.callback('CreateAccount', 'create'),
+            Markup.button.callback('CreateAccount', Button.CREATE),
         ]
     ])
 
     private keyTransactionService = Markup.inlineKeyboard([
         [
-            Markup.button.callback('Transfer Money', 'transfer'),
-            Markup.button.callback('Transaction History', 'history'),
+            Markup.button.callback('Transfer Money', Button.TRANSFER),
+            Markup.button.callback('Transaction History', Button.HISTORY),
         ],
         [
-            Markup.button.callback('Cancel', 'cancel')
+            Markup.button.callback('Cancel', Button.CANCEL)
         ]
     ])
     private keyTransferMethod = Markup.inlineKeyboard([
         [
-            Markup.button.callback('Wallet address', 'address'),
-            Markup.button.callback('Wallet publickey', 'publickey'),
+            Markup.button.callback('Wallet address', Button.WALLET_ADDRESS),
+            Markup.button.callback('Wallet publickey', Button.PUBLICKEY),
         ],
         [
-            Markup.button.callback('Cancel', 'cancel')
+            Markup.button.callback('Cancel', Button.CANCEL)
         ]
 
     ])
@@ -79,12 +80,7 @@ export class TelegramService {
         } else {
             await ctx.reply(`Xin chào ${options.username}, tôi có thể giúp gì cho bạn!`, this.keyboardMarkup)
         }
-
-
-
         // await ctx.reply(`Xin chào ${options.username}, tôi có thể giúp gì cho bạn!`, this.keyboardMarkup);
-
-
     }
 
     async handleMessage(msg: any) {
@@ -93,17 +89,14 @@ export class TelegramService {
             username: msg.update.message.from.first_name,
             text: msg.update.message.text,
         }
-
         const data: DataCache = (await this.cacheManager.get(options.idUser)) as DataCache;
-
         if (!data) {
             return await msg.reply(
                 'Xin lỗi, tôi không hiểu. Vui lòng thử lại', this.keyboardMarkup,
             );
         }
-
         switch (data.action) {
-            case 'deposit':
+            case Action.DEPOSIT:
                 if (data.step === 1) {
                     const Money = options.text;
                     if (!Number(Money)) {
@@ -132,36 +125,36 @@ export class TelegramService {
                     }
                 }
                 break;
-                case 'withdraw':
-                    if (data.step === 1) {
-                        const Money = options.text;
-                        if (!Number(Money)) {
-                            await this.cacheManager.del(options.idUser);
-                            return await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
-                        }
-                        if (Number(Money) && Number(Money) > 0) {
-                            data.money = options.text;
-                            data.step = 2;
-                            await this.cacheManager.set(options.idUser, data, 30000);
-                        }
-                        if (data.step === 2) {
-                            await this.cacheManager.set(options.idUser, data, 30000);
-                            await this.wallerService.withdrawn(options.idUser, Number(data.money));
-                            const address = await this.wallerService.checkAddress(options.idUser)
-                            const createTransaction = {
-                                balance: String(data.money),
-                                type: String(data.action),
-                                senderAddress: address,
-                                receiverAddress: address
-                            }
-                            await this.transactionService.createTransaction(createTransaction);
-                            await this.cacheManager.del(options.idUser);
-                            await msg.reply(`Rút tiền thành công`);
-                            await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
-                        }
+            case Action.WITHDRAW:
+                if (data.step === 1) {
+                    const Money = options.text;
+                    if (!Number(Money)) {
+                        await this.cacheManager.del(options.idUser);
+                        return await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
                     }
-                    break;
-            case 'history':
+                    if (Number(Money) && Number(Money) > 0) {
+                        data.money = options.text;
+                        data.step = 2;
+                        await this.cacheManager.set(options.idUser, data, 30000);
+                    }
+                    if (data.step === 2) {
+                        await this.cacheManager.set(options.idUser, data, 30000);
+                        await this.wallerService.withdrawn(options.idUser, Number(data.money));
+                        const address = await this.wallerService.checkAddress(options.idUser)
+                        const createTransaction = {
+                            balance: String(data.money),
+                            type: String(data.action),
+                            senderAddress: address,
+                            receiverAddress: address
+                        }
+                        await this.transactionService.createTransaction(createTransaction);
+                        await this.cacheManager.del(options.idUser);
+                        await msg.reply(`Rút tiền thành công`);
+                        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                    }
+                }
+                break;
+            case Action.HISTORY:
                 const address = await this.wallerService.checkAddress(options.idUser)
 
                 const listHistory = await this.transactionService.getListHistory(address)
@@ -171,11 +164,11 @@ export class TelegramService {
                         await this.cacheManager.del(options.idUser);
                         return await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
                     } else {
-                        if (listHistory < amountHistory) {
+                        if (Number(listHistory) < Number(amountHistory)) {
                             await this.cacheManager.del(options.idUser);
                             return await msg.reply(`Xin lỗi bạn chỉ có ${listHistory} giao dịch thôi`, this.keyboardMarkup);
                         } else {
-                            const selectHistory = await this.transactionService.getAmountHistory(amountHistory, address);
+                            const selectHistory = await this.transactionService.getAmountHistory(Number(amountHistory), address);
                             for (const item of selectHistory) {
                                 await msg.reply(`Mã giao dịch:\n ${item?.id}\nSố tiền: ${item?.balance}\nKiểu: ${item?.type}\nTài khoản nguồn: ${item.senderAddress}\nTài khoản nhận: ${item.receiverAddress}`);
                             }
@@ -185,7 +178,7 @@ export class TelegramService {
                     }
                 }
                 break;
-            case 'addressTransfer':
+            case Action.TRANSFER_BY_ADDRESS:
                 if (data.step === 1) {
                     const address = options.text;
                     data.step = 2;
@@ -197,15 +190,15 @@ export class TelegramService {
                         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
                         break;
                     }
-                    if (data.action === 'addressTransfer') {
-                        data.action = 'sendMoney';
+                    if (data.action === Action.TRANSFER_BY_ADDRESS) {
+                        data.action = Action.SEND_MONEY_ADRESS;
                         data.step = 3;
                         data.receiver = address;
                         await msg.reply('Bạn muốn nạp bao nhiêu tiền');
                     }
                 }
                 break;
-            case 'publicKeyTransfer':
+            case Action.TRANFER_BY_PUBLIC_KEY:
                 if (data.step === 1) {
                     const publicKey = options.text;
                     data.step = 2;
@@ -217,24 +210,47 @@ export class TelegramService {
                         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
                         break;
                     }
-                    if (data.action === 'publicKeyTransfer') {
-                        data.action = 'sendMoneyPublicKey';
+                    if (data.action === Action.TRANFER_BY_PUBLIC_KEY) {
+                        data.action = Action.SEND_MONEY_PUBLIC_KEY;
                         data.step = 3;
                         data.receiver = publicKey;
                         await msg.reply('Bạn muốn nạp bao nhiêu tiền');
                     }
                 }
                 break;
-            case 'sendMoneyAddress':
-                if (data.action = 'sendMoneyAddress') {
+            case Action.SEND_MONEY_ADRESS:
+                if (data.action === Action.SEND_MONEY_ADRESS) {
                     const money = options.text;
-                    const address = data.receiver;
-                    const checkStatus = await this.wallerService.sendMoneybyAddress(options.idUser, address, money);
-                    if (checkStatus === WalletStatus.SUCCESS) {
+                    if (!Number(money)) {
+                        await this.cacheManager.del(options.idUser);
+                        return await msg.reply('Vui lòng thực hiện lại', this.keyTransferMethod);
+                    }
+                    if (Number(money) && Number(money) > 0) {
+                        data.money = options.text;
+                        data.step = 2;
+                        await this.cacheManager.set(options.idUser, data, 30000);
+                    }
+                    const receiver = data.receiver;
+                    const sender = await this.wallerService.getAddressById(options.idUser);
+                    const checkStatus = await this.wallerService.sendMoneybyAddress(options.idUser, receiver, money);
+                    if (checkStatus === WalletStatus.SUCCESS && data.step === 2) {
                         await msg.reply(`Chuyển tiền thành công`);
                         data.step = 1;
                         data.action = '';
-                        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                        const createTransaction = {
+                            balance: String(data.money),
+                            type: Action.SEND_MONEY_ADRESS,
+                            senderAddress: sender,
+                            receiverAddress: receiver
+                        }
+                        const saveTransaction = await this.transactionService.createTransaction(createTransaction);
+                        if (saveTransaction) {
+                            await msg.reply('Giao dịch đã được lưu');
+                            await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                        }
+                        else{
+                            await msg.reply('Giao dịch chưa được lưu');
+                        }      
                     }
                     else if (checkStatus === WalletStatus.SELF) {
                         await msg.reply(`Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`);
@@ -247,16 +263,40 @@ export class TelegramService {
                     }
                 }
                 break;
-            case 'sendMoneyPublicKey':
+            case Action.SEND_MONEY_PUBLIC_KEY:
                 if (data.action = 'sendMoneyPublicKey') {
                     const money = options.text;
+                    if (!Number(money)) {
+                        await this.cacheManager.del(options.idUser);
+                        return await msg.reply('Vui lòng thực hiện lại', this.keyTransferMethod);
+                    }
+                    if (Number(money) && Number(money) > 0) {
+                        data.money = options.text;
+                        data.step = 2;
+                        await this.cacheManager.set(options.idUser, data, 30000);
+                    }
                     const publicKey = data.receiver;
+                    const receiver= await this.wallerService.getAddressByPublicKey(publicKey);
+                    const sender = await this.wallerService.getAddressById(options.idUser);
                     const checkStatus = await this.wallerService.sendMoneybyPublicKey(options.idUser, publicKey, money);
-                    if (checkStatus === WalletStatus.SUCCESS) {
+                    if (checkStatus === WalletStatus.SUCCESS &&  data.step === 2) {
                         await msg.reply(`Chuyển tiền thành công`);
                         data.step = 1;
                         data.action = '';
-                        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                        const createTransaction = {
+                            balance: String(data.money),
+                            type: Action.SEND_MONEY_PUBLIC_KEY,
+                            senderAddress: sender,
+                            receiverAddress: receiver
+                        }
+                        const saveTransaction = await this.transactionService.createTransaction(createTransaction);
+                        if (saveTransaction) {
+                            await msg.reply('Giao dịch đã được lưu');
+                            await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                        }
+                        else{
+                            await msg.reply('Giao dịch chưa được lưu');
+                        }  
                     }
                     else if (checkStatus === WalletStatus.SELF) {
                         await msg.reply(`Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`);
@@ -282,19 +322,14 @@ export class TelegramService {
             user_name: msg.update.callback_query.from.first_name,
             data: msg.update.callback_query.data
         }
-
         const data: DataCache = ((await this.cacheManager.get(options.user_id)) as DataCache) || {
             action: '',
             step: 1,
             money: '',
         };
-
         const checkUser = await this.wallerService.findOneUser(options.user_id);
-
-
-
         switch (options.data) {
-            case 'create':
+            case Button.CREATE:
                 if (data.action === '') {
                     if (!checkUser) {
                         const wallet = await this.wallerService.generateNewWallet();
@@ -316,13 +351,13 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id)
                 }
                 break;
-            case 'deposit':
+            case Button.DEPOSIT:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
                 if (data.action === '') {
                     await this.cacheManager.set(options.user_id, {
-                        action: 'deposit',
+                        action: Action.DEPOSIT,
                         step: 1,
                     }, 30000);
                     await msg.reply('Bạn muốn nạp bao nhiêu tiền');
@@ -330,7 +365,7 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-            case 'history':
+            case Button.HISTORY:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
@@ -343,7 +378,7 @@ export class TelegramService {
                 }
                 if (data.action === '') {
                     await this.cacheManager.set(options.user_id, {
-                        action: 'history',
+                        action: Action.HISTORY,
                         step: 1,
                     }, 15000);
 
@@ -353,7 +388,7 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-            case 'information':
+            case Button.INFORMATION:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
@@ -362,19 +397,19 @@ export class TelegramService {
                 await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
                 await this.cacheManager.del(options.user_id);
                 break;
-            case 'transaction':
+            case Button.TRANSACTION:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
                 await msg.reply('Phương thức chuyển tiền:', this.keyTransactionService);
                 break;
-            case 'address':
+            case Button.WALLET_ADDRESS:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
                 if (data.action === '') {
                     await this.cacheManager.set(options.user_id, {
-                        action: 'addressTransfer',
+                        action: Action.TRANSFER_BY_ADDRESS,
                         step: 1,
                     }, 30000);
                     await msg.reply('Điền địa chỉ người nhận');
@@ -382,13 +417,13 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-            case 'publickey':
+            case Button.PUBLICKEY:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
                 if (data.action === '') {
                     await this.cacheManager.set(options.user_id, {
-                        action: 'publicKeyTransfer',
+                        action: Action.TRANFER_BY_PUBLIC_KEY,
                         step: 1,
                     }, 30000);
                     await msg.reply('Điền mã khóa người nhận');
@@ -396,19 +431,19 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-            case 'transfer':
+            case Button.TRANSFER:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
                 await msg.reply('Bạn muốn chuyển tiền bằng phương thức gì', this.keyTransferMethod);
                 break;
-            case 'withdraw':
+            case Button.WITHDRAW:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
                 if (data.action === '') {
                     await this.cacheManager.set(options.user_id, {
-                        action: 'withdraw',
+                        action: Action.WITHDRAW,
                         step: 1,
                     }, 30000);
                     await msg.reply('Bạn muốn rút bao nhiêu tiền');
@@ -416,7 +451,7 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-            case 'cancel':
+            case Button.CANCEL:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
@@ -428,7 +463,5 @@ export class TelegramService {
                 break;
         }
     }
-
-
 
 }

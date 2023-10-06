@@ -71,7 +71,7 @@ export class WalletService {
         }
     }
 
-   async sendMoney(id_user: string, receiverAddress: string, money: number) {
+    async sendMoneybyAddress(id_user: string, receiverAddress: string, money: number) {
         const sender = await this.walletRepository.findOne({
             where: {
                 id_user: id_user
@@ -82,6 +82,35 @@ export class WalletService {
                 address: receiverAddress,
             }
         })
+        if(sender.user_name===receiver.user_name){
+            return WalletStatus.SELF;
+        }
+        if (!sender || !receiver) {
+            return WalletStatus.NOT_FOUND;
+        }
+        if (Number(sender.balance) === 0 || Number(money) > Number(sender.balance)) {
+            return WalletStatus.NOT_ENOUGH_FUND
+        }
+        const senderBalance = Number(Number(sender.balance) - Number(money));
+        const receiverBalance = Number(Number(receiver.balance) + Number(money));
+        await this.walletRepository.update(sender.id, { balance: String(senderBalance) });
+        await this.walletRepository.update(receiver.id, { balance: String(receiverBalance) });
+        return WalletStatus.SUCCESS;
+    }
+    async sendMoneybyPublicKey(id_user: string, publicKey: string, money: number) {
+        const sender = await this.walletRepository.findOne({
+            where: {
+                id_user: id_user
+            }
+        })
+        const receiver = await this.walletRepository.findOne({
+            where: {
+                publicKey: publicKey,
+            }
+        })
+        if(sender.user_name===receiver.user_name){
+            return WalletStatus.SELF;
+        }
         if (!sender || !receiver) {
             return WalletStatus.NOT_FOUND;
         }
@@ -95,7 +124,7 @@ export class WalletService {
         return WalletStatus.SUCCESS;
     }
 
-    async withdrawn(id_user: string,money:number){
+    async withdrawn(id_user: string, money: number) {
         const user = await this.walletRepository.findOne({
             where: {
                 id_user: id_user
@@ -104,7 +133,7 @@ export class WalletService {
         if (!user) {
             return WalletStatus.NOT_FOUND;
         }
-        if(money > (Number(user.balance))){
+        if (money > (Number(user.balance))) {
             return WalletStatus.NOT_ENOUGH_FUND;
         }
         const userBalance = Number(Number(user.balance) - Number(money));
@@ -122,6 +151,22 @@ export class WalletService {
         return checkUser.address;
     }
 
+    async checkWalletByAddress(address: string) {
+        const check = await this.walletRepository.findOne({ where: { address: address } })
+        if (!check) {
+            return WalletStatus.NOT_FOUND;
+        }
+        return WalletStatus.FOUND
+
+    }
+    async checkWalletByPublicKey(publicKey: string) {
+        const check = await this.walletRepository.findOne({ where: { publicKey: publicKey } })
+        if (!check) {
+            return WalletStatus.NOT_FOUND;
+        }
+        return WalletStatus.FOUND
+
+    }
     async checkInformation(id: string) {
         const user = await this.walletRepository.findOne({
             where: {

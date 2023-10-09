@@ -2,30 +2,42 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
-let ellipticcurve = require("starkbank-ecdsa");
-import keccak256 from 'keccak256';
-let Ecdsa = ellipticcurve.Ecdsa;
-let PrivateKey = ellipticcurve.PrivateKey;
+// let ellipticcurve = require("starkbank-ecdsa");
+// import keccak256 from 'keccak256';
+import { WalletStatus } from './wallet.status.enum';
+let crypto = require("crypto");
+let ethers = require('ethers');
+let Wallet = require('ethereumjs-wallet').default
+let EthUtil = require("ethereumjs-util");
 @Injectable()
 export class WalletService {
     constructor(
         @InjectRepository(WalletEntity) private readonly walletRepository: Repository<WalletEntity>,
     ) { }
-    async generateNewWallet(): Promise<any> {
-        let privateKeyGen = new PrivateKey();
-        let privateKey =privateKeyGen.toString('hex');
-        let publicKey = privateKeyGen.publicKey().toString('hex');
-        let address = keccak256(publicKey).toString('hex')
-        console.log(privateKey)
-        const wallet = new WalletEntity();
-        wallet.privateKey = privateKey;
-        wallet.address = address;
-        wallet.publickey = publicKey;
+    // async generateNewWallet(): Promise<any> {
+    //     let privateKeyGen = new PrivateKey();
+    //     let privateKey =privateKeyGen.toString('hex');
+    //     let publicKey = privateKeyGen.publicKey().toString('hex');
+    //     let address = keccak256(publicKey).toString('hex')
+    //     console.log(privateKey)
+    //     const wallet = new WalletEntity();
+    //     wallet.privateKey = privateKey;
+    //     wallet.address = address;
+    //     wallet.publickey = publicKey;
+    //     const createWallet = await this.walletRepository.save(wallet);
+    //     if (createWallet) {
+    //         return true
+    //     }
+    //     return false;
+    // }
+    async createWallet(jsonData: any) {
+        const wallet = this.walletRepository.create(jsonData);
         const createWallet = await this.walletRepository.save(wallet);
         if (createWallet) {
-            return true
+            return true;
+        } else {
+            return false;
         }
-        return false;
     }
 
     async generateNewWallet() {

@@ -62,7 +62,7 @@ export class TelegramService {
         @Inject(CACHE_MANAGER) private cacheManager: Cache
 
     ) {
-        this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
+        this.bot = new Telegraf('6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo');
         this.bot.start(this.handleStart.bind(this));
         this.bot.on('text', this.handleMessage.bind(this));
         this.bot.action(/.*/, this.handleButton.bind(this));
@@ -144,6 +144,7 @@ export class TelegramService {
                     else {
                         await msg.reply(`Rút tiền thất bại, vui lòng thử lại`);
                         await this.cacheManager.del(options.idUser);
+                        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
                     }
                     if (data.step === 2) {
                         await this.cacheManager.set(options.idUser, data, 30000);
@@ -209,7 +210,7 @@ export class TelegramService {
                         data.action = Action.SEND_MONEY_ADRESS;
                         data.step = 3;
                         data.receiver = address;
-                        await msg.reply('Bạn muốn nạp bao nhiêu tiền');
+                        await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
                     }
                 }
                 else {
@@ -232,7 +233,7 @@ export class TelegramService {
                         data.action = Action.SEND_MONEY_PUBLIC_KEY;
                         data.step = 3;
                         data.receiver = publicKey;
-                        await msg.reply('Bạn muốn nạp bao nhiêu tiền');
+                        await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
                     }
                 }
                 else {

@@ -6,15 +6,21 @@ export class WalletEntity {
     id: string;
 
     @Column()
+    id_user:string;
+
+    @Column()
+    user_name: string;
+
+    @Column()
     address: string
 
     @Column()
     privateKey: string;
 
     @Column()
-    publickey: string;
+    publicKey: string;
 
-    @Column()
+    @Column({default:0})
     balance: string;
 
     @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })

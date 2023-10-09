@@ -17,20 +17,20 @@ export class TransactionService {
         }
     }
 
-    async getListHistory(idUser: string): Promise<number> {
+    async getListHistory(address: string) {
         const query = await this.transactionRepository
             .createQueryBuilder('entity')
-            .where('entity.sourceAccount = :idUser OR entity.destinationAccount = :idUser', { idUser })
+            .where('entity.senderAddress = :address OR entity.receiverAddress = :address', { address })
             .getCount();
-        return query;
+        return String(query);
     }
 
-    async getAmountHistory(limit: number, id_user: string): Promise<TransactionEntity[]> {
+    async getAmountHistory(limit: number, address: string): Promise<TransactionEntity[]> {
         const query = await this.transactionRepository
             .createQueryBuilder('entity')
             .where(
-                'entity.sourceAccount = :id_user or entity.destinationAccount = :id_user',
-                { id_user },
+                'entity.senderAddress = :address or entity.receiverAddress = :address',
+                { address },
             )
             .orderBy('entity.create_date', 'DESC')
             .limit(limit)

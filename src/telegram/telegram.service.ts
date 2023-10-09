@@ -39,7 +39,7 @@ export class TelegramService {
         [
             Markup.button.callback('Transfer Money', Button.TRANSFER),
             Markup.button.callback('Transaction History', Button.HISTORY),
-            Markup.button.callback('Search', Button.SEARCH),
+           // Markup.button.callback('Search', Button.SEARCH),
         ],
         [
             Markup.button.callback('Cancel', Button.CANCEL)
@@ -83,7 +83,6 @@ export class TelegramService {
         }
         // await ctx.reply(`Xin chào ${options.username}, tôi có thể giúp gì cho bạn!`, this.keyboardMarkup);
     }
-
     async handleMessage(msg: any) {
         const options = {
             idUser: msg.update.message.from.id,
@@ -255,6 +254,7 @@ export class TelegramService {
                         const saveTransaction = await this.transactionService.createTransaction(createTransaction);
                         if (saveTransaction) {
                             await msg.reply('Giao dịch đã được lưu');
+                            this.cacheManager.del(options.idUser);
                             await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
                         }
                         else {
@@ -263,16 +263,26 @@ export class TelegramService {
                     }
                     else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
                         await msg.reply(`Không đủ tiền trong tài khoản, vui lòng thử lại`, this.keyTransferMethod);
+                        await this.cacheManager.set(options.idUser, {
+                            action: '',
+                            step: 1,
+                        });
                         break;
                     }
                     else if (checkStatus === WalletStatus.SELF) {
                         await msg.reply(`Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`);
-                        data.step = 1;
-                        data.action = '';
+                        await this.cacheManager.set(options.idUser, {
+                            action: '',
+                            step: 1,
+                        });
                         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
                     }
                     else {
                         await msg.reply(`Chuyển tiền thất bại`);
+                        await this.cacheManager.set(options.idUser, {
+                            action: '',
+                            step: 1,
+                        });
                         break;
                     }
                 }
@@ -306,24 +316,27 @@ export class TelegramService {
                         const saveTransaction = await this.transactionService.createTransaction(createTransaction);
                         if (saveTransaction) {
                             await msg.reply('Giao dịch đã được lưu');
+                            this.cacheManager.del(options.idUser);
                             await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
                         }
                         else {
+                            this.cacheManager.del(options.idUser);
                             await msg.reply('Giao dịch chưa được lưu');
                         }
                     }
                     else if (checkStatus === WalletStatus.SELF) {
                         await msg.reply(`Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`);
-                        data.step = 1;
-                        data.action = '';
+                        this.cacheManager.del(options.idUser);
                         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
                     }
                     else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
                         await msg.reply(`Không đủ tiền trong tài khoản, vui lòng thử lại`, this.keyTransferMethod);
+                        this.cacheManager.del(options.idUser);
                         break;
                     }
                     else {
                         await msg.reply(`Chuyển tiền thất bại`);
+                        this.cacheManager.del(options.idUser);
                         break;
                     }
                 }

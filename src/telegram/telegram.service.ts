@@ -109,7 +109,7 @@ export class TelegramService {
                         await this.cacheManager.set(options.idUser, data, 30000);
                     }
                     else {
-                        await msg.reply(`Nạp tiền thất bại, vui lòng thử lại`);
+                        await msg.reply(`Nạp tiền thất bại, vui lòng thử l`);
                         await this.cacheManager.del(options.idUser);
                     }
                     if (data.step === 2) {
@@ -430,7 +430,10 @@ export class TelegramService {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
                 const info = await this.wallerService.checkInformation(options.user_id);
-                await msg.reply(`Private Key:${info.privateKey} \n ID Address:${info.address} \n Username:${info.user_name} \n Balance:${info.balance}`)
+                await msg.reply(`Private Key:${info.privateKey}`)
+                await msg.reply(`Public Key:${info.publicKey}`)
+                await msg.reply(`Address:${info.address}`)
+                await msg.reply(`Username:${info.user_name} \n Balance:${info.balance}`)
                 await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
                 await this.cacheManager.del(options.user_id);
                 break;

@@ -136,7 +136,7 @@ export class WalletService {
         if (money > (Number(user.balance))) {
             return WalletStatus.NOT_ENOUGH_FUND;
         }
-        const userBalance = Number(Number(user.balance) - Number(money));
+        const userBalance = Number(user.balance) - Number(money);
         await this.walletRepository.update(user.id, { balance: String(userBalance) });
         return WalletStatus.SUCCESS;
     }

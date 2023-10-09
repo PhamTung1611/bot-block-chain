@@ -39,6 +39,7 @@ export class TelegramService {
         [
             Markup.button.callback('Transfer Money', Button.TRANSFER),
             Markup.button.callback('Transaction History', Button.HISTORY),
+            Markup.button.callback('Search', Button.SEARCH),
         ],
         [
             Markup.button.callback('Cancel', Button.CANCEL)
@@ -139,7 +140,16 @@ export class TelegramService {
                     }
                     if (data.step === 2) {
                         await this.cacheManager.set(options.idUser, data, 30000);
-                        await this.wallerService.withdrawn(options.idUser, Number(data.money));
+                       const checkWithDrawn= await this.wallerService.withdrawn(options.idUser, Number(data.money));
+                       if(checkWithDrawn === WalletStatus.NOT_ENOUGH_FUND){
+                        await msg.reply(`Không đủ tiền trong tài khoản, vui lòng thử lại`,this.keyboardMarkup);
+                        break;
+                       }
+                       if(checkWithDrawn === WalletStatus.NOT_FOUND)
+                       {
+                        await msg.reply(`tài khoản hoặc ví không tồn tại, vui lòng thử lại`,this.keyboardMarkup);
+                        break;
+                       }
                         const address = await this.wallerService.checkAddress(options.idUser)
                         const createTransaction = {
                             balance: String(data.money),
@@ -455,6 +465,7 @@ export class TelegramService {
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
                 }
+                await this.cacheManager.del(options.user_id);
                 return await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup)
             default:
                 await this.cacheManager.del(options.user_id);

@@ -16,7 +16,7 @@ import { WalletEntity } from './wallet/wallet.entity';
     host: 'localhost', // Địa chỉ máy chủ PostgreSQL
     port: 5432,         // Cổng mặc định của PostgreSQL
     username: 'postgres', // Tên người dùng PostgreSQL
-    password: '1611', // Mật khẩu PostgreSQL
+    password: 'Convitcon12', // Mật khẩu PostgreSQL
     database: 'BlockChainBot', // Tên cơ sở dữ liệu PostgreSQL
     // entities: [__dirname + '/**/*.entity{.ts,.js}'],
     entities: [TransactionEntity,WalletEntity],

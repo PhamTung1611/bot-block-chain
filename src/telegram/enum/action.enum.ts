@@ -10,6 +10,6 @@ export enum Action{
     CANCEL = 'cancel',
     HISTORY = 'history',
     SEND_MONEY_ADRESS = 'sendMoneyAdress',
-    SEND_MONEY_PUBLIC_KEY = 'sendMoneyAdress',
+    SEND_MONEY_PUBLIC_KEY = 'sendMoneyPublicKey',
     NOTTHING=''
 }

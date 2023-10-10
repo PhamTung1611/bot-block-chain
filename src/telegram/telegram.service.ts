@@ -8,6 +8,7 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 
+
 interface DataCache {
     action: string;
     step: number;
@@ -26,6 +27,8 @@ export class TelegramService {
         ], [
             Markup.button.callback('Transaction', Button.TRANSACTION),
             Markup.button.callback('Information', Button.INFORMATION),
+        ],[
+            Markup.button.callback('Test', Button.TEST)
         ]
     ]);
 
@@ -498,6 +501,15 @@ export class TelegramService {
                 }
                 await this.cacheManager.del(options.user_id);
                 return await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup)
+            case Button.TEST:
+                
+                // const addressWallet = await this.wallerService.getAddressById(options.user_id);
+                // const pk = await this.wallerService.checkPrivateKeyByID(options.user_id)
+                console.log(12);
+                
+                const mint = await this.wallerService.mint('0x34b0014ba5f25c214f8e0b65259e1e275bc015fe',1)
+
+                break;
             default:
                 await this.cacheManager.del(options.user_id);
                 await msg.reply(`Xin lỗi tôi không hiểu`);

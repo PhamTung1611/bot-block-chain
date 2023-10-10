@@ -2,34 +2,339 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
-// let ellipticcurve = require("starkbank-ecdsa");
-// import keccak256 from 'keccak256';
 import { WalletStatus } from './wallet.status.enum';
-let crypto = require("crypto");
-let ethers = require('ethers');
-let Wallet = require('ethereumjs-wallet').default
-let EthUtil = require("ethereumjs-util");
+import { Contract, ethers,Wallet } from 'ethers';
+
+// const contract = new ethers.Contract(contractAddress,abi,provider);
 @Injectable()
 export class WalletService {
+	private readonly provider : ethers.JsonRpcProvider;
+	private readonly contractAddress:string;
+	private readonly abi: any
     constructor(
         @InjectRepository(WalletEntity) private readonly walletRepository: Repository<WalletEntity>,
-    ) { }
-    // async generateNewWallet(): Promise<any> {
-    //     let privateKeyGen = new PrivateKey();
-    //     let privateKey =privateKeyGen.toString('hex');
-    //     let publicKey = privateKeyGen.publicKey().toString('hex');
-    //     let address = keccak256(publicKey).toString('hex')
-    //     console.log(privateKey)
-    //     const wallet = new WalletEntity();
-    //     wallet.privateKey = privateKey;
-    //     wallet.address = address;
-    //     wallet.publickey = publicKey;
-    //     const createWallet = await this.walletRepository.save(wallet);
-    //     if (createWallet) {
-    //         return true
-    //     }
-    //     return false;
-    // }
+    ) {
+		this.provider = new ethers.JsonRpcProvider('https://rpc1-testnet.miraichain.io/');
+		this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09';
+		this.abi = [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "newOwner",
+						"type": "address"
+					}
+				],
+				"name": "addAuthorizedOwner",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"stateMutability": "nonpayable",
+				"type": "constructor"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "owner",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "spender",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "Approval",
+				"type": "event"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "spender",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "approve",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "burn",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "account",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					}
+				],
+				"name": "mint",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "ownerToRemove",
+						"type": "address"
+					}
+				],
+				"name": "removeAuthorizedOwner",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "transfer",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "from",
+						"type": "address"
+					},
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "Transfer",
+				"type": "event"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "from",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "to",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "value",
+						"type": "uint256"
+					}
+				],
+				"name": "transferFrom",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "allowance",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "authorizedOwners",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "balanceOf",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "decimals",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "name",
+				"outputs": [
+					{
+						"internalType": "string",
+						"name": "",
+						"type": "string"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "owner",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "symbol",
+				"outputs": [
+					{
+						"internalType": "string",
+						"name": "",
+						"type": "string"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "totalSupply",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		]
+     }
     async createWallet(jsonData: any) {
         const wallet = this.walletRepository.create(jsonData);
         const createWallet = await this.walletRepository.save(wallet);
@@ -39,28 +344,27 @@ export class WalletService {
             return false;
         }
     }
+	async mint(address: string, amount: number){
 
+			const nguonWallet = new Wallet("0xdeae541d05d7e16328faec8a81740a3adb6231b5c88876f87079fa11d34b65df",this.provider);
+			console.log(nguonWallet);
+			
+			const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
+			// console.log(await contract.authorizedOwners(address),123);
+			console.log(contract);
+			
+			const txResponse = await contract.mint(address, amount);
+			console.log('Giao dịch đã được gửi, mã giao dịch:', txResponse.hash);
+	}
     async generateNewWallet() {
-        let id = crypto.randomBytes(32).toString('hex');
-        let privateKey = "0x" + id;
-        const privateKeyBuffer = EthUtil.toBuffer(privateKey);
-
-        const wallet = Wallet.fromPrivateKey(privateKeyBuffer);
-
-        const publicKeyBuffer = wallet.getPublicKey();
-
-        const publicKey = EthUtil.bufferToHex(publicKeyBuffer);
-        const address = wallet.getAddressString();
-
-        const createWallet = {
-            privateKey: privateKey,
-            publicKey: publicKey,
-            address: address,
-        }
-
-        return createWallet;
-
-    }
+        const wallet = ethers.Wallet.createRandom();
+		console.log(wallet.privateKey);
+		
+    return {
+		privateKey: wallet.privateKey,
+		publicKey: wallet.publicKey,
+		address: wallet.address,
+	  };}
 
     async findOneUser(id_user: string) {
         const User = await this.walletRepository.findOne({
@@ -214,4 +518,15 @@ export class WalletService {
         })
         return user;
     }
+	async checkPrivateKeyByID(id_user:string){
+		const checkUser = await this.walletRepository.findOne({
+            where: {
+                id_user: id_user
+            }
+        })
+        if(!checkUser){
+            return WalletStatus.NOT_FOUND;
+        }
+        return checkUser.privateKey;
+	}
 }

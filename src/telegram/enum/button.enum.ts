@@ -9,5 +9,6 @@ export enum Button{
     WALLET_ADDRESS = 'addressTransfer',
     PUBLICKEY='publickey',
     HISTORY = 'history',
-    SEARCH ='search'
+    SEARCH ='search',
+    TEST = 'test'
 }

@@ -27,7 +27,7 @@ export class TelegramService {
         ], [
             Markup.button.callback('Transaction', Button.TRANSACTION),
             Markup.button.callback('Information', Button.INFORMATION),
-        ],[
+        ], [
             Markup.button.callback('Test', Button.TEST)
         ]
     ]);
@@ -117,18 +117,28 @@ export class TelegramService {
                     }
                     if (data.step === 2) {
                         await this.cacheManager.set(options.idUser, data, 30000);
-                        await this.wallerService.updateMoney(options.idUser, Number(data.money));
-                        const address = await this.wallerService.checkAddress(options.idUser)
-                        const createTransaction = {
-                            balance: String(data.money),
-                            type: String(data.action),
-                            senderAddress: address,
-                            receiverAddress: address
+                        const addressWallet = await this.wallerService.getAddressById(options.idUser);
+                        const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
+                        const mint = await this.wallerService.mint(addressWallet, Number(data.money), privateKey)
+                        if (!mint) {
+                            await this.cacheManager.del(options.idUser);
+                            await msg.reply(`Nạp tiền thất bại`);
+                            await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+                        } else {
+                            await this.wallerService.updateMoney(options.idUser, Number(data.money));
+                            const address = await this.wallerService.checkAddress(options.idUser)
+                            const createTransaction = {
+                                balance: String(data.money),
+                                type: String(data.action),
+                                senderAddress: address,
+                                receiverAddress: address
+                            }
+                            await this.transactionService.createTransaction(createTransaction);
+                            await this.cacheManager.del(options.idUser);
+                            await msg.reply(`Nạp tiền thành công`);
+                            await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
                         }
-                        await this.transactionService.createTransaction(createTransaction);
-                        await this.cacheManager.del(options.idUser);
-                        await msg.reply(`Nạp tiền thành công`);
-                        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
+
                     }
                 }
                 break;
@@ -162,6 +172,8 @@ export class TelegramService {
                             await msg.reply(`tài khoản hoặc ví không tồn tại, vui lòng thử lại`, this.keyboardMarkup);
                             break;
                         }
+                        const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
+                        await this.wallerService.burn(data.money,privateKey);
                         const address = await this.wallerService.checkAddress(options.idUser)
                         const createTransaction = {
                             balance: String(data.money),
@@ -378,6 +390,9 @@ export class TelegramService {
                             id_user: msg.chat.id,
                             user_name: msg.chat.first_name,
                         }
+
+                        await this.wallerService.addAuthorizedOwner(wallet.address);
+
                         const data = await this.wallerService.createWallet({ ...wallet, ...user })
                         if (data) {
                             await msg.reply(`Tạo tài khoản thành công`);
@@ -502,12 +517,12 @@ export class TelegramService {
                 await this.cacheManager.del(options.user_id);
                 return await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup)
             case Button.TEST:
-                
+
                 // const addressWallet = await this.wallerService.getAddressById(options.user_id);
                 // const pk = await this.wallerService.checkPrivateKeyByID(options.user_id)
                 console.log(12);
-                
-                const mint = await this.wallerService.mint('0x34b0014ba5f25c214f8e0b65259e1e275bc015fe',1)
+
+                const mint = await this.wallerService.burn('0x34b0014ba5f25c214f8e0b65259e1e275bc015fe',1)
 
                 break;
             default:

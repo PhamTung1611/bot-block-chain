@@ -65,7 +65,7 @@ export class TelegramService {
         @Inject(CACHE_MANAGER) private cacheManager: Cache
 
     ) {
-        this.bot = new Telegraf('6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo');
+        this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
         this.bot.start(this.handleStart.bind(this));
         this.bot.on('text', this.handleMessage.bind(this));
         this.bot.action(/.*/, this.handleButton.bind(this));

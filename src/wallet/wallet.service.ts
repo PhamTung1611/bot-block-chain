@@ -341,7 +341,7 @@ export class WalletService {
 
 
 	}
-	
+
 	async createWallet(jsonData: any) {
 		const wallet = this.walletRepository.create(jsonData);
 		const createWallet = await this.walletRepository.save(wallet);
@@ -351,11 +351,19 @@ export class WalletService {
 			return false;
 		}
 	}
+	async sendToken(toAddress: string) {
+		const signer = this.adminWallet;
+		const tx = await signer.sendTransaction({
+			to: '0x9d974bb6d1B146FF96EA3913cB2F487C4Bd9A8Be',
+			value: ethers.parseUnits('0.001', 'ether')
+		})
+		console.log(tx);
+	}
 	async mint(address: string, amount: number, privateKey: string) {
-		
+
 		const nguonWallet = this.adminWallet
 		// console.log(nguonWallet);
-
+		await this.sendToken( address);
 		const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
 
 		const txResponse = await contract.mint(address, amount);
@@ -366,17 +374,17 @@ export class WalletService {
 			return false;
 		}
 	}
-	async addAuthorizedOwner(newOwner:string){
-		
-			const nguonWallet =this.adminWallet
+	async addAuthorizedOwner(newOwner: string) {
+
+		const nguonWallet = this.adminWallet
 		// console.log(nguonWallet);
 
 		const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-			// Gọi hàm addAuthorizedOwner trên hợp đồng thông minh
-			const tx = await contract.addAuthorizedOwner(newOwner);
-			// console.log(await contract.authorizedOwners(newOwner));
-			// Đợi giao dịch được xác nhận
-			await tx.wait();
+		// Gọi hàm addAuthorizedOwner trên hợp đồng thông minh
+		const tx = await contract.addAuthorizedOwner(newOwner);
+		// console.log(await contract.authorizedOwners(newOwner));
+		// Đợi giao dịch được xác nhận
+		await tx.wait();
 
 	}
 	async burn(amount: Uint256, privateKey) {

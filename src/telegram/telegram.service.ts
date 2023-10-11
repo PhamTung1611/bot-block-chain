@@ -27,8 +27,6 @@ export class TelegramService {
         ], [
             Markup.button.callback('Transaction', Button.TRANSACTION),
             Markup.button.callback('Information', Button.INFORMATION),
-        ], [
-            Markup.button.callback('Test', Button.TEST)
         ]
     ]);
 
@@ -51,7 +49,6 @@ export class TelegramService {
     private keyTransferMethod = Markup.inlineKeyboard([
         [
             Markup.button.callback('Wallet address', Button.WALLET_ADDRESS),
-            Markup.button.callback('Wallet publickey', Button.PUBLICKEY),
         ],
         [
             Markup.button.callback('Cancel', Button.CANCEL)
@@ -119,7 +116,7 @@ export class TelegramService {
                         await this.cacheManager.set(options.idUser, data, 30000);
                         const addressWallet = await this.wallerService.getAddressById(options.idUser);
                         const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
-                        const mint = await this.wallerService.mint(addressWallet, Number(data.money), privateKey)
+                        const mint = await this.wallerService.mint(addressWallet, Number(data.money),privateKey)
                         if (!mint) {
                             await this.cacheManager.del(options.idUser);
                             await msg.reply(`Nạp tiền thất bại`);
@@ -172,9 +169,13 @@ export class TelegramService {
                             await msg.reply(`tài khoản hoặc ví không tồn tại, vui lòng thử lại`, this.keyboardMarkup);
                             break;
                         }
-                        // const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
-                        await this.wallerService.burn(data.money);
+                        const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
                         const address = await this.wallerService.checkAddress(options.idUser)
+                        console.log(address);
+                        
+                        const burn = await this.wallerService.burn(data.money,privateKey);
+                        console.log(burn);
+                        
                         const createTransaction = {
                             balance: String(data.money),
                             type: String(data.action),
@@ -233,29 +234,6 @@ export class TelegramService {
                     await this.cacheManager.del(options.idUser);
                 }
                 break;
-            case Action.TRANFER_BY_PUBLIC_KEY:
-                if (data.step === 1) {
-                    const publicKey = options.text;
-                    data.step = 2;
-                    const checkPublicKey = await this.wallerService.checkWalletByPublicKey(publicKey);
-                    if (checkPublicKey === WalletStatus.NOT_FOUND) {
-                        await msg.reply(`Mã khóa người dùng không tồn tại`);
-                        this.cacheManager.del(options.idUser);
-                        await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
-                        break;
-                    }
-                    if (data.action === Action.TRANFER_BY_PUBLIC_KEY) {
-                        data.action = Action.SEND_MONEY_PUBLIC_KEY;
-                        data.step = 3;
-                        data.receiver = publicKey;
-                        await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
-                    }
-                }
-                else {
-                    await msg.reply(`Có gì đó không ổn vui lòng thử lại`);
-                    await this.cacheManager.del(options.idUser);
-                }
-                break;
             case Action.SEND_MONEY_ADRESS:
                 if (data.action === Action.SEND_MONEY_ADRESS) {
                     const money = options.text;
@@ -271,6 +249,12 @@ export class TelegramService {
                     const receiver = data.receiver;
                     const sender = await this.wallerService.getAddressById(options.idUser);
                     const checkStatus = await this.wallerService.sendMoneybyAddress(options.idUser, receiver, money);
+
+                    const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
+                    console.log(privateKey,receiver);
+                    
+                     await this.wallerService.transfer(receiver,Number(data.money),privateKey);
+
                     if (checkStatus === WalletStatus.SUCCESS && data.step === 2) {
                         await msg.reply(`Chuyển tiền thành công`);
                         data.step = 1;
@@ -300,60 +284,6 @@ export class TelegramService {
                         await msg.reply(`Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`);
                         this.cacheManager.del(options.idUser);
                         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
-                    }
-                    else {
-                        await msg.reply(`Chuyển tiền thất bại`);
-                        this.cacheManager.del(options.idUser);
-                        break;
-                    }
-                }
-                break;
-            case Action.SEND_MONEY_PUBLIC_KEY:
-                if (data.action === Action.SEND_MONEY_PUBLIC_KEY) {
-                    const money = options.text;
-                    if (!Number(money)) {
-                        await this.cacheManager.del(options.idUser);
-                        return await msg.reply('Vui lòng thực hiện lại', this.keyTransferMethod);
-                    }
-                    if (Number(money) && Number(money) > 0) {
-                        data.money = options.text;
-                        data.step = 2;
-                        await this.cacheManager.set(options.idUser, data, 30000);
-                    }
-                    const publicKey = data.receiver;
-                    const receiver = await this.wallerService.getAddressByPublicKey(publicKey);
-                    const sender = await this.wallerService.getAddressById(options.idUser);
-                    const checkStatus = await this.wallerService.sendMoneybyPublicKey(options.idUser, publicKey, money);
-                    if (checkStatus === WalletStatus.SUCCESS && data.step === 2) {
-                        await msg.reply(`Chuyển tiền thành công`);
-                        data.step = 1;
-                        data.action = '';
-                        const createTransaction = {
-                            balance: String(data.money),
-                            type: Action.SEND_MONEY_PUBLIC_KEY,
-                            senderAddress: sender,
-                            receiverAddress: receiver
-                        }
-                        const saveTransaction = await this.transactionService.createTransaction(createTransaction);
-                        if (saveTransaction) {
-                            await msg.reply('Giao dịch đã được lưu');
-                            this.cacheManager.del(options.idUser);
-                            await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
-                        }
-                        else {
-                            this.cacheManager.del(options.idUser);
-                            await msg.reply('Giao dịch chưa được lưu');
-                        }
-                    }
-                    else if (checkStatus === WalletStatus.SELF) {
-                        await msg.reply(`Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`);
-                        this.cacheManager.del(options.idUser);
-                        await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
-                    }
-                    else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
-                        await msg.reply(`Không đủ tiền trong tài khoản, vui lòng thử lại`, this.keyTransferMethod);
-                        this.cacheManager.del(options.idUser);
-                        break;
                     }
                     else {
                         await msg.reply(`Chuyển tiền thất bại`);
@@ -393,6 +323,7 @@ export class TelegramService {
 
                         await this.wallerService.addAuthorizedOwner(wallet.address);
 
+                        await this.wallerService.sendToken(wallet.address)
                         const data = await this.wallerService.createWallet({ ...wallet, ...user })
                         if (data) {
                             await msg.reply(`Tạo tài khoản thành công`);
@@ -476,20 +407,6 @@ export class TelegramService {
                     await this.cacheManager.del(options.user_id);
                 }
                 break;
-            case Button.PUBLICKEY:
-                if (!checkUser) {
-                    return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
-                }
-                if (data.action === '') {
-                    await this.cacheManager.set(options.user_id, {
-                        action: Action.TRANFER_BY_PUBLIC_KEY,
-                        step: 1,
-                    }, 30000);
-                    await msg.reply('Điền mã khóa người nhận');
-                } else {
-                    await this.cacheManager.del(options.user_id);
-                }
-                break;
             case Button.TRANSFER:
                 if (!checkUser) {
                     return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
@@ -516,15 +433,6 @@ export class TelegramService {
                 }
                 await this.cacheManager.del(options.user_id);
                 return await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup)
-            case Button.TEST:
-
-                // const addressWallet = await this.wallerService.getAddressById(options.user_id);
-                // const pk = await this.wallerService.checkPrivateKeyByID(options.user_id)
-                console.log(12);
-
-                // const mint = await this.wallerService.burn('0x34b0014ba5f25c214f8e0b65259e1e275bc015fe',1)
-
-                break;
             default:
                 await this.cacheManager.del(options.user_id);
                 await msg.reply(`Xin lỗi tôi không hiểu`);

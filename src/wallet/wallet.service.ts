@@ -387,9 +387,9 @@ export class WalletService {
 		await tx.wait();
 
 	}
-	async burn(amount: Uint256, privateKey) {
+	async burn(amount: Uint256) {
 		try {
-			const nguonWallet = new Wallet(privateKey, this.provider);
+			const nguonWallet = this.adminWallet
 
 			const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
 

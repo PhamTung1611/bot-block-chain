@@ -65,7 +65,7 @@ export class TelegramService {
         @Inject(CACHE_MANAGER) private cacheManager: Cache
 
     ) {
-        this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
+        this.bot = new Telegraf('6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo');
         this.bot.start(this.handleStart.bind(this));
         this.bot.on('text', this.handleMessage.bind(this));
         this.bot.action(/.*/, this.handleButton.bind(this));
@@ -172,8 +172,8 @@ export class TelegramService {
                             await msg.reply(`tài khoản hoặc ví không tồn tại, vui lòng thử lại`, this.keyboardMarkup);
                             break;
                         }
-                        const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
-                        await this.wallerService.burn(data.money,privateKey);
+                        // const privateKey = await this.wallerService.checkPrivateKeyByID(options.idUser)
+                        await this.wallerService.burn(data.money);
                         const address = await this.wallerService.checkAddress(options.idUser)
                         const createTransaction = {
                             balance: String(data.money),
@@ -522,7 +522,7 @@ export class TelegramService {
                 // const pk = await this.wallerService.checkPrivateKeyByID(options.user_id)
                 console.log(12);
 
-                const mint = await this.wallerService.burn('0x34b0014ba5f25c214f8e0b65259e1e275bc015fe',1)
+                // const mint = await this.wallerService.burn('0x34b0014ba5f25c214f8e0b65259e1e275bc015fe',1)
 
                 break;
             default:

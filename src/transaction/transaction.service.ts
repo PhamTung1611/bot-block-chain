@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TransactionEntity } from './transaction.entity';
 import { Repository } from 'typeorm';
+import { TransactionStatus } from './enum/transaction.enum';
 
 @Injectable()
 export class TransactionService {
@@ -19,7 +20,24 @@ export class TransactionService {
       return false;
     }
   }
+  async updateTransactionState(status: TransactionStatus): Promise<boolean> {
+    const lastetTransaction = await this.findLatestTransaction();
+    lastetTransaction.status = status;
+    const saveTransaction = await this.transactionRepository.save(lastetTransaction);
+    if (saveTransaction) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  async findLatestTransaction(): Promise<TransactionEntity | undefined> {
+    const transactions = await this.transactionRepository.find({
+      order: { create_date: 'DESC' },
+      take: 1,
+    });
 
+    return transactions[0];
+  }
   async getListHistory(address: string) {
     const query = await this.transactionRepository
       .createQueryBuilder('entity')

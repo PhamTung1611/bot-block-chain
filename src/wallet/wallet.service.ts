@@ -5,6 +5,7 @@ import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import { Uint256 } from 'web3';
+import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 const adminPK =
 	'0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
 @Injectable()
@@ -353,11 +354,10 @@ export class WalletService {
 	}
 	async sendToken(toAddress: string) {
 		const signer = this.adminWallet;
-		const tx = await signer.sendTransaction({
+		await signer.sendTransaction({
 			to: toAddress,
-			value: ethers.parseUnits('0.001', 'ether'),
+			value: ethers.parseUnits('0.005', 'ether'),
 		});
-		// console.log(tx);
 	}
 	async mint(address: string, amount: number) {
 		const nguonWallet = new Wallet(adminPK, this.provider);
@@ -386,17 +386,9 @@ export class WalletService {
 	async burn(amount: Uint256, privateKey: string, address: string) {
 		try {
 			const nguonWallet = new Wallet(privateKey, this.provider);
-			console.log(1,nguonWallet);
-			
 			const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-			console.log(2,contract);
-			
 			const tx = await contract.burn(amount);
-			console.log(3,tx);
-			
 			await tx.wait();
-			// console.log(4,await tx.wait());
-			
 			return true;
 		} catch (error) {
 			return false;
@@ -405,15 +397,17 @@ export class WalletService {
 
 	async transfer(toAddress: string, amount: number, privateKey: string) {
 		try {
-			const nguonWallet = new Wallet(privateKey, this.provider);
-			const contract = new Contract(toAddress, this.abi, nguonWallet);
-			const tx = await contract.transfer(toAddress, amount);
-			const response = await nguonWallet.sendTransaction(tx);
-			return response.hash;
+		  const nguonWallet = new Wallet(privateKey, this.provider);
+		  const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
+		  await this.sendToken(nguonWallet.address);
+		  const tx = await contract.transfer(toAddress, amount);
+		  const response = await nguonWallet.sendTransaction(tx);
+		  return response.hash;
 		} catch (error) {
-			return false;
+			console.log(error);
+		  return false;
 		}
-	}
+	  }
 
 	async generateNewWallet() {
 		const wallet = ethers.Wallet.createRandom();
@@ -447,99 +441,45 @@ export class WalletService {
 		console.log(a);
 
 	}
-	//   async updateMoney(id_user: string, money: number) {
-	//     const checkUser = await this.walletRepository.findOne({
-	//       where: {
-	//         id_user: id_user,
-	//       },
-	//     });
-	//     if (checkUser && Number(money) > 0) {
-	//       const coin = Number(Number(checkUser.balance) + Number(money));
-	//       await this.walletRepository.update(checkUser.id, {
-	//         balance: String(coin),
-	//       });
-	//       return true;
-	//     } else {
-	//       return false;
-	//     }
-	//   }
-	//   async sendMoneybyAddress(
-	//     id_user: string,
-	//     receiverAddress: string,
-	//     money: number,
-	//   ) {
-	//     const sender = await this.walletRepository.findOne({
-	//       where: {
-	//         id_user: id_user,
-	//       },
-	//     });
-	//     const receiver = await this.walletRepository.findOne({
-	//       where: {
-	//         address: receiverAddress,
-	//       },
-	//     });
-
-	// 	const balanceSender = await this.getBalance(sender.address);
-
-
-	//     if (sender.user_name === receiver.user_name) {
-	//       return WalletStatus.SELF;
-	//     }
-	//     if (!sender || !receiver) {
-	//       return WalletStatus.NOT_FOUND;
-	//     }
-	//     if (
-	//       Number(sender.balance) === 0 ||
-	//       Number(money) > Number(sender.balance)
-	//     ) {
-	//       return WalletStatus.NOT_ENOUGH_FUND;
-	//     }
-	//     const senderBalance = Number(Number(sender.balance) - Number(money));
-	//     const receiverBalance = Number(Number(receiver.balance) + Number(money));
-	//     await this.walletRepository.update(sender.id, {
-	//       balance: String(senderBalance),
-	//     });
-	//     await this.walletRepository.update(receiver.id, {
-	//       balance: String(receiverBalance),
-	//     });
-	//     return WalletStatus.SUCCESS;
-	//   }
-	//   async sendMoneybyPublicKey(id_user: string,publicKey: string,money: number,) {
-	//     const sender = await this.walletRepository.findOne({
-	//       where: {
-	//         id_user: id_user,
-	//       },
-	//     });
-	//     const receiver = await this.walletRepository.findOne({
-	//       where: {
-	//         publicKey: publicKey,
-	//       },
-	//     });
-
-
-	//     if (sender.user_name === receiver.user_name) {
-	//       return WalletStatus.SELF;
-	//     }
-	//     if (!sender || !receiver) {
-	//       return WalletStatus.NOT_FOUND;
-	//     }
-	//     if (
-	//       Number(sender.balance) === 0 ||
-	//       Number(money) > Number(sender.balance)
-	//     ) {
-	//       return WalletStatus.NOT_ENOUGH_FUND;
-	//     }
-	//     const senderBalance = Number(Number(sender.balance) - Number(money));
-	//     const receiverBalance = Number(Number(receiver.balance) + Number(money));
-	//     await this.walletRepository.update(sender.id, {
-	//       balance: String(senderBalance),
-	//     });
-	//     await this.walletRepository.update(receiver.id, {
-	//       balance: String(receiverBalance),
-	//     });
-	//     return WalletStatus.SUCCESS;
-	//   }
-
+	async sendMoneybyAddress(
+		id_user: string,
+		receiverAddress: string,
+		money: number,
+	  ) {
+		const sender = await this.walletRepository.findOne({
+		  where: {
+			id_user: id_user,
+		  },
+		});
+		const receiver = await this.walletRepository.findOne({
+		  where: {
+			address: receiverAddress,
+		  },
+		});
+		if (sender.user_name === receiver.user_name) {
+		  return WalletStatus.SELF;
+		}
+		if (!sender || !receiver) {
+		  return WalletStatus.NOT_FOUND;
+		}
+		const balance = await this.getBalance(sender.address);
+		if (balance < money) {
+		  return WalletStatus.NOT_ENOUGH_FUND;
+		}
+		const privateKey = await this.checkPrivateKeyByID(
+		  id_user,
+		);
+	   const checkTransaction = await this.transfer(
+		  receiver.address,
+		  Number(money),
+		  privateKey,
+		);
+		console.log(checkTransaction);
+		if(!checkTransaction){
+		  return TransactionStatus.FAIL
+		}
+		return TransactionStatus.SUCCESS
+	  }
 	async withdrawn(id_user: string, money: number) {
 		const user = await this.walletRepository.findOne({
 			where: {

@@ -7,6 +7,7 @@ import { WalletService } from 'src/wallet/wallet.service';
 import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
+import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 
 interface DataCache {
     action: string;
@@ -27,9 +28,10 @@ export class TelegramService {
         [
             Markup.button.callback('Transaction', Button.TRANSACTION),
             Markup.button.callback('Information', Button.INFORMATION),
-        ], [
-            Markup.button.callback('Test', Button.TEST)
-        ]
+        ],
+        //  [
+        //     Markup.button.callback('Test', Button.TEST)
+        // ]
     ]);
 
     private keyCreateAccount = Markup.inlineKeyboard([
@@ -54,7 +56,7 @@ export class TelegramService {
         private wallerService: WalletService,
         @Inject(CACHE_MANAGER) private cacheManager: Cache,
     ) {
-        this.bot = new Telegraf('6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo');
+        this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
         this.bot.start(this.handleStart.bind(this));
         this.bot.on('text', this.handleMessage.bind(this));
         this.bot.action(/.*/, this.handleButton.bind(this));
@@ -88,7 +90,7 @@ export class TelegramService {
         };
         const data: DataCache = (await this.cacheManager.get(
             options.idUser,
-        )) as DataCache;
+        ));
         if (!data) {
             return await msg.reply(
                 'Xin lỗi, tôi không hiểu. Vui lòng thử lại',
@@ -317,86 +319,71 @@ export class TelegramService {
                     await this.cacheManager.del(options.idUser);
                 }
                 break;
-            // case Action.SEND_MONEY_ADRESS:
-            //     if (data.action === Action.SEND_MONEY_ADRESS) {
-            //         const money = options.text;
-            //         if (!Number(money)) {
-            //             await this.cacheManager.del(options.idUser);
-            //             return await msg.reply(
-            //                 'Vui lòng thực hiện lại',
-            //                 this.keyTransferMethod,
-            //             );
-            //         }
-            //         if (Number(money) && Number(money) > 0) {
-            //             data.money = options.text;
-            //             data.step = 2;
-            //             await this.cacheManager.set(options.idUser, data, 30000);
-            //         }
-            //         const receiver = data.receiver;
-            //         const sender = await this.wallerService.getAddressById(
-            //             options.idUser,
-            //         );
-            //         // const checkStatus = await this.wallerService.sendMoneybyAddress(
-            //         //     options.idUser,
-            //         //     receiver,
-            //         //     money,
-            //         // );
-
-            //         const privateKey = await this.wallerService.checkPrivateKeyByID(
-            //             options.idUser,
-            //         );
-            //         console.log(privateKey, receiver);
-
-            //         await this.wallerService.transfer(
-            //             receiver,
-            //             Number(data.money),
-            //             privateKey,
-            //         );
-
-            //         if (checkStatus === WalletStatus.SUCCESS && data.step === 2) {
-            //             await msg.reply(`Chuyển tiền thành công`);
-            //             data.step = 1;
-            //             data.action = '';
-            //             const createTransaction = {
-            //                 balance: String(data.money),
-            //                 type: Action.SEND_MONEY_ADRESS,
-            //                 senderAddress: sender,
-            //                 receiverAddress: receiver,
-            //             };
-            //             const saveTransaction =
-            //                 await this.transactionService.createTransaction(
-            //                     createTransaction,
-            //                 );
-            //             if (saveTransaction) {
-            //                 await msg.reply('Giao dịch đã được lưu');
-            //                 this.cacheManager.del(options.idUser);
-            //                 await msg.reply(
-            //                     'Tôi có thể giúp gì tiếp cho bạn',
-            //                     this.keyboardMarkup,
-            //                 );
-            //             } else {
-            //                 await msg.reply('Giao dịch chưa được lưu');
-            //             }
-            //         } else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
-            //             await msg.reply(
-            //                 `Không đủ tiền trong tài khoản, vui lòng thử lại`,
-            //                 this.keyTransferMethod,
-            //             );
-            //             this.cacheManager.del(options.idUser);
-            //             break;
-            //         } else if (checkStatus === WalletStatus.SELF) {
-            //             await msg.reply(
-            //                 `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`,
-            //             );
-            //             this.cacheManager.del(options.idUser);
-            //             await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
-            //         } else {
-            //             await msg.reply(`Chuyển tiền thất bại`);
-            //             this.cacheManager.del(options.idUser);
-            //             break;
-            //         }
-            //     }
-            //     break;
+                case Action.SEND_MONEY_ADDRESS:
+                    if (data.action === Action.SEND_MONEY_ADDRESS) {
+                      const money = options.text;
+                      if (!Number(money)) {
+                        await this.cacheManager.del(options.idUser);
+                        return await msg.reply(
+                          'Vui lòng thực hiện lại',
+                          this.keyTransferMethod,
+                        );
+                      }
+                      if (Number(money) && Number(money) > 0) {
+                        data.money = options.text;
+                        data.step = 2;
+                        await this.cacheManager.set(options.idUser, data, 30000);
+                      }
+                      const receiver = data.receiver;
+                      const sender = await this.wallerService.getAddressById(
+                        options.idUser,
+                      );
+                      const createTransaction = {
+                        balance: String(data.money),
+                        type: Action.SEND_MONEY_ADDRESS,
+                        senderAddress: sender,
+                        receiverAddress: receiver,
+                        status: TransactionStatus.CREATED,
+                      };
+                      //initialize Transaction and save to db
+                      await this.transactionService.createTransaction(createTransaction);
+                      const checkStatus = await this.wallerService.sendMoneybyAddress(
+                        options.idUser,
+                        receiver,
+                        money,
+                      );
+                      await this.transactionService.updateTransactionState(TransactionStatus.PENDING);
+              
+                      if (checkStatus === TransactionStatus.SUCCESS && data.step === 2) {
+                        await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS);
+                        await msg.reply(`Chuyển tiền thành công`);
+                        data.step = 1;
+                        data.action = '';  
+                          await msg.reply(
+                            'Tôi có thể giúp gì tiếp cho bạn',
+                            this.keyboardMarkup,
+                          );
+                      } else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
+                        await msg.reply(
+                          `Không đủ tiền trong tài khoản, vui lòng thử lại`,
+                          this.keyTransferMethod,
+                        );
+                        this.cacheManager.del(options.idUser);
+                        break;
+                      } else if (checkStatus === WalletStatus.SELF) {
+                        await msg.reply(
+                          `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`,
+                        );
+                        this.cacheManager.del(options.idUser);
+                        await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
+                      } else {
+                        await msg.reply(`Chuyển tiền thất bại`, this.keyTransferMethod);
+                        await this.transactionService.updateTransactionState(TransactionStatus.FAIL);
+                        this.cacheManager.del(options.idUser);
+                        break;
+                      }
+                    }
+                    break;
             default:
                 await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
                 break;
@@ -411,7 +398,7 @@ export class TelegramService {
         };
         const data: DataCache = ((await this.cacheManager.get(
             options.user_id,
-        )) as DataCache) || {
+        ))) || {
             action: '',
             step: 1,
             money: '',
@@ -578,22 +565,6 @@ export class TelegramService {
                 }
                 await this.cacheManager.del(options.user_id);
                 await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
-                break;
-            case Button.TEST:
-                const addressWallet = await this.wallerService.getAddressById(
-                    options.user_id,
-                );
-                const privateKey = await this.wallerService.checkPrivateKeyByID(
-                    options.user_id,
-                );
-                // const abc = await this.wallerService.deposit(addressWallet,2,privateKey);
-                // await this.wallerService.sendToken(addressWallet)
-                await this.wallerService.burn('1',privateKey,addressWallet)
-                // const def = await this.wallerService.getBalance(addressWallet)
-                // console.log(def);
-                console.log(123);
-                
-
                 break;
             default:
                 await this.cacheManager.del(options.user_id);

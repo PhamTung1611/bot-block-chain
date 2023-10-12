@@ -20,8 +20,6 @@ export class WalletEntity {
   @Column()
   publicKey: string;
 
-  @Column({ default: 0 })
-  balance: string;
 
   @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
   create_date: Date;

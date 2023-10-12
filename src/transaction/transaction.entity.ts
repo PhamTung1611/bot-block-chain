@@ -17,6 +17,9 @@ export class TransactionEntity {
   @Column()
   type: string;
 
+  @Column()
+  status: string;
+
   @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
   create_date: Date;
 }

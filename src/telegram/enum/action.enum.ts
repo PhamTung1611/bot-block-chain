@@ -9,7 +9,7 @@ export enum Action {
   TRANFER_BY_PUBLIC_KEY = 'transfer_by_public_key',
   CANCEL = 'cancel',
   HISTORY = 'history',
-  SEND_MONEY_ADRESS = 'sendMoneyAdress',
+  SEND_MONEY_ADDRESS = 'sendMoneyAdress',
   SEND_MONEY_PUBLIC_KEY = 'sendMoneyPublicKey',
   NOTTHING = '',
 }

@@ -3,8 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { WalletEntity } from './wallet.entity';
 import { WalletService } from './wallet.service';
 
-@Module({  imports:[
-    TypeOrmModule.forFeature([WalletEntity])
-  ],
-  providers: [WalletService]})
+@Module({
+  imports: [TypeOrmModule.forFeature([WalletEntity])],
+  providers: [WalletService],
+})
 export class WalletModule {}

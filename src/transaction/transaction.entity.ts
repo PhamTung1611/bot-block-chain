@@ -1,22 +1,22 @@
-import { Entity, Column, PrimaryGeneratedColumn } from "typeorm";
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity()
-export class TransactionEntity{
-    @PrimaryGeneratedColumn('uuid')
-    id:string;
+export class TransactionEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-    @Column()
-    senderAddress:string;
+  @Column()
+  senderAddress: string;
 
-    @Column()
-    receiverAddress:string;
+  @Column()
+  receiverAddress: string;
 
-    @Column()
-    balance:string;
+  @Column()
+  balance: string;
 
-    @Column()
-    type:string;
+  @Column()
+  type: string;
 
-    @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
-    create_date: Date;
+  @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
+  create_date: Date;
 }

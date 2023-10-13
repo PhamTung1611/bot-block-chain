@@ -413,10 +413,7 @@ export class TelegramService {
                             id_user: msg.chat.id,
                             user_name: msg.chat.first_name,
                         };
-
-                        // await this.wallerService.addAuthorizedOwner(wallet.address);
-
-                        await this.wallerService.sendToken(wallet.address);
+                       await this.wallerService.sendToken(wallet.address);
                         const data = await this.wallerService.createWallet({
                             ...wallet,
                             ...user,

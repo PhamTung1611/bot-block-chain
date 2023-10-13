@@ -399,12 +399,20 @@ export class WalletService {
 		try {
 		  const nguonWallet = new Wallet(privateKey, this.provider);
 		  const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-		  await this.sendToken(nguonWallet.address);
-		  const tx = await contract.transfer(toAddress, amount);
+	
+		  // Populate the transaction object with the incremented nonce value.
+		  const tx = await nguonWallet.populateTransaction({
+			to: toAddress,
+			value: amount,
+		  });
+	
+		  // Send the transaction.
 		  const response = await nguonWallet.sendTransaction(tx);
+	
+		  // Return the transaction hash.
 		  return response.hash;
 		} catch (error) {
-			console.log(error);
+		  console.log(error);
 		  return false;
 		}
 	  }

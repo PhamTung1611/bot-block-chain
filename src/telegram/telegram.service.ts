@@ -56,7 +56,7 @@ export class TelegramService {
         private wallerService: WalletService,
         @Inject(CACHE_MANAGER) private cacheManager: Cache,
     ) {
-        this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
+        this.bot = new Telegraf('6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo');
         this.bot.start(this.handleStart.bind(this));
         this.bot.on('text', this.handleMessage.bind(this));
         this.bot.action(/.*/, this.handleButton.bind(this));
@@ -113,34 +113,33 @@ export class TelegramService {
                         data.step = 2;
                         await this.cacheManager.set(options.idUser, data, 30000);
                     } else {
-                        await msg.reply(`Vui lòng thực hiện lại hành động này`);
                         await this.cacheManager.del(options.idUser);
+                        await msg.reply(`Vui lòng thực hiện lại`, this.keyboardMarkup);
                     }
                     if (data.step === 2) {
                         await this.cacheManager.set(options.idUser, data, 30000);
                         const addressWallet = await this.wallerService.getAddressById(
                             options.idUser,
                         );
-
+                        const address = await this.wallerService.checkAddress(
+                            options.idUser,
+                        );
+                        const createTransaction = {
+                            balance: String(data.money),
+                            type: String(data.action),
+                            senderAddress: address,
+                            receiverAddress: address,
+                            status: TransactionStatus.CREATED,
+                        };
+                        await this.transactionService.createTransaction(createTransaction);
                         await msg.reply(`processing...`);
                         const mint = await this.wallerService.mint(
                             addressWallet,
                             Number(data.money),
                         );
+                        await this.transactionService.updateTransactionState(TransactionStatus.PENDING)
                         if (!mint) {
-                            const address = await this.wallerService.checkAddress(
-                                options.idUser,
-                            );
-                            const createTransaction = {
-                                balance: String(data.money),
-                                type: String(data.action),
-                                senderAddress: address,
-                                receiverAddress: address,
-                                status: 'fail'
-                            };
-                            await this.transactionService.createTransaction(
-                                createTransaction,
-                            );
+                            await this.transactionService.updateTransactionState(TransactionStatus.FAIL)
                             await this.cacheManager.del(options.idUser);
                             await msg.reply(`Nạp tiền thất bại`);
                             await msg.reply(
@@ -148,24 +147,7 @@ export class TelegramService {
                                 this.keyboardMarkup,
                             );
                         } else {
-                            // await this.wallerService.updateMoney(
-                            //     options.idUser,
-                            //     Number(data.money),
-                            // );
-                            const address = await this.wallerService.checkAddress(
-                                options.idUser,
-                            );
-                            const createTransaction = {
-                                balance: String(data.money),
-                                type: String(data.action),
-                                senderAddress: address,
-                                receiverAddress: address,
-                                status: 'success'
-                            };
-                            await this.transactionService.createTransaction(
-                                createTransaction,
-                            );
-
+                            await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS)
                             await this.cacheManager.del(options.idUser);
                             await msg.reply(`Nạp tiền thành công`);
                             await msg.reply(
@@ -204,6 +186,14 @@ export class TelegramService {
                         const address = await this.wallerService.checkAddress(
                             options.idUser,
                         );
+                        const createTransaction = {
+                            balance: String(data.money),
+                            type: String(data.action),
+                            senderAddress: address,
+                            receiverAddress: address,
+                            status: TransactionStatus.CREATED
+                        };
+                        await this.transactionService.createTransaction(createTransaction);
                             const balance = await this.wallerService.getBalance(address)
                         if(Number(balance)< Number(data.money)){
                             await this.cacheManager.del(options.idUser);
@@ -217,6 +207,8 @@ export class TelegramService {
                         const privateKey = await this.wallerService.checkPrivateKeyByID(
                             options.idUser,
                         );
+                        await this.transactionService.updateTransactionState(TransactionStatus.PENDING)
+                        await msg.reply(`processing....`)
 
                         const burn = await this.wallerService.burn(
                             data.money,
@@ -224,31 +216,14 @@ export class TelegramService {
                             address,
                         );
                         if (!burn) {
-                            const createTransaction = {
-                                balance: String(data.money),
-                                type: String(data.action),
-                                senderAddress: address,
-                                receiverAddress: address,
-                                status: 'fail'
-                            };
-
-                            await this.transactionService.createTransaction(createTransaction);
+                            await this.transactionService.updateTransactionState(TransactionStatus.FAIL)
                             await msg.reply(`Rút tiền thất bại`);
                             await msg.reply(
                                 'Tôi có thể giúp gì tiếp cho bạn',
                                 this.keyboardMarkup,
                             );
                         }
-
-                        const createTransaction = {
-                            balance: String(data.money),
-                            type: String(data.action),
-                            senderAddress: address,
-                            receiverAddress: address,
-                            status: 'success'
-                        };
-
-                        await this.transactionService.createTransaction(createTransaction);
+                        await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS)
                         await this.cacheManager.del(options.idUser);
                         await msg.reply(`Rút tiền thành công`);
                         await msg.reply(

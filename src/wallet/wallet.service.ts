@@ -401,16 +401,9 @@ export class WalletService {
 		  const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
 	
 		  // Populate the transaction object with the incremented nonce value.
-		  const tx = await nguonWallet.populateTransaction({
-			to: toAddress,
-			value: amount,
-		  });
-	
-		  // Send the transaction.
-		  const response = await nguonWallet.sendTransaction(tx);
-	
-		  // Return the transaction hash.
-		  return response.hash;
+		  const tx = await contract.transfer(toAddress,amount);
+			tx.nonce++;
+		  return true;
 		} catch (error) {
 		  console.log(error);
 		  return false;

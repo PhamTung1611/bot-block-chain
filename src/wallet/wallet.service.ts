@@ -433,10 +433,8 @@ export class WalletService {
 	}
 	async deposit(toAddress: string, amount: number, privateKey: string) {
 		const contract = new ethers.Contract(this.contractAddress, this.abi, this.adminWallet);
-		// Gọi hàm `mint` từ hợp đồng để nạp tiền vào ví
 		const tx = await contract.mint(toAddress, amount);
 
-		// Đợi giao dịch được xác nhận
 		const a = await tx.wait();
 
 		console.log(a);
@@ -446,41 +444,41 @@ export class WalletService {
 		id_user: string,
 		receiverAddress: string,
 		money: number,
-	  ) {
+	) {
 		const sender = await this.walletRepository.findOne({
-		  where: {
-			id_user: id_user,
-		  },
+			where: {
+				id_user: id_user,
+			},
 		});
 		const receiver = await this.walletRepository.findOne({
-		  where: {
-			address: receiverAddress,
-		  },
+			where: {
+				address: receiverAddress,
+			},
 		});
 		if (sender.user_name === receiver.user_name) {
-		  return WalletStatus.SELF;
+			return WalletStatus.SELF;
 		}
 		if (!sender || !receiver) {
-		  return WalletStatus.NOT_FOUND;
+			return WalletStatus.NOT_FOUND;
 		}
 		const balance = await this.getBalance(sender.address);
 		if (balance < money) {
-		  return WalletStatus.NOT_ENOUGH_FUND;
+			return WalletStatus.NOT_ENOUGH_FUND;
 		}
 		const privateKey = await this.checkPrivateKeyByID(
-		  id_user,
+			id_user,
 		);
-	   const checkTransaction = await this.transfer(
-		  receiver.address,
-		  Number(money),
-		  privateKey,
+		const checkTransaction = await this.transfer(
+			receiver.address,
+			Number(money),
+			privateKey,
 		);
 		console.log(checkTransaction);
-		if(!checkTransaction){
-		  return TransactionStatus.FAIL
+		if (!checkTransaction) {
+			return TransactionStatus.FAIL
 		}
 		return TransactionStatus.SUCCESS
-	  }
+	}
 	async withdrawn(id_user: string, money: number) {
 		const user = await this.walletRepository.findOne({
 			where: {

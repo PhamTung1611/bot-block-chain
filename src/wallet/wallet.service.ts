@@ -395,7 +395,27 @@ export class WalletService {
 		}
 	}
 
-
+	async transfer(toAddress: string, amount: number, privateKey: string) {
+		try {
+		  const nguonWallet = new Wallet(privateKey, this.provider);
+		  const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
+	
+		  // Populate the transaction object with the incremented nonce value.
+		  const tx = await nguonWallet.populateTransaction({
+			to: toAddress,
+			value: amount,
+		  });
+	
+		  // Send the transaction.
+		  const response = await nguonWallet.sendTransaction(tx);
+	
+		  // Return the transaction hash.
+		  return response.hash;
+		} catch (error) {
+		  console.log(error);
+		  return false;
+		}
+	  }
 
 	async generateNewWallet() {
 		const wallet = ethers.Wallet.createRandom();
@@ -426,28 +446,6 @@ export class WalletService {
 
 		console.log(a);
 
-	}
-	async transfer(toAddress: string, amount: number, privateKey: string) {
-		try {
-			const nguonWallet = new Wallet(privateKey, this.provider);
-			const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-
-			// Populate the transaction object with the incremented nonce value.
-			const tx = await nguonWallet.populateTransaction({
-				from:nguonWallet.address,
-				to: toAddress,
-				value: amount,
-			});
-
-			// Send the transaction.
-			const response = await nguonWallet.sendTransaction(tx);
-
-			// Return the transaction hash.
-			return response.hash;
-		} catch (error) {
-			console.log(error);
-			return false;
-		}
 	}
 	async sendMoneybyAddress(
 		id_user: string,

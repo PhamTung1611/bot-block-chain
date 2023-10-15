@@ -1,27 +1,31 @@
-import { Inject, Injectable } from '@nestjs/common';
+import {  Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import { Uint256 } from 'web3';
-import { Cache } from 'cache-manager';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Process, Processor } from '@nestjs/bull';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { log } from 'console';
 const adminPK = '0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
 
 @Injectable()
-export class WalletService {
+export class WalletService  {
 	private readonly provider: ethers.JsonRpcProvider;
 	private readonly contractAddress: string;
 	private readonly abi: any;
 	private readonly adminWallet: any;
-
+	private redisClient: Redis;
 	constructor(
 		@InjectRepository(WalletEntity)
 		private readonly walletRepository: Repository<WalletEntity>,
-		@Inject(CACHE_MANAGER) private cache: Cache,
+
+		@InjectQueue('wallet:optimize')
+		private readonly wallet_queue: Queue,
 	) {
 		this.provider = new ethers.JsonRpcProvider(
 			'https://rpc1-testnet.miraichain.io/',
@@ -347,7 +351,9 @@ export class WalletService {
 		];
 		this.adminWallet = new Wallet(adminPK, this.provider);
 	}
-	async createWallet(jsonData: any) {
+
+	async createWallet(jsonData: any,address: string) {
+		this.sendToken(address);
 		const wallet = this.walletRepository.create(jsonData);
 		const createWallet = await this.walletRepository.save(wallet);
 		if (createWallet) {
@@ -368,15 +374,20 @@ export class WalletService {
 	async mint(address: string, amount: number) {
 		const nguonWallet = new Wallet(adminPK, this.provider);
 		const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-		const txResponse = await contract.mint(address, amount);
+		const txResponse = await contract.mint(this.contractAddress, amount);
+		const job = await this.wallet_queue.add('mint-token',{
+			txResponse,
+			address
+		})
+
 		if (txResponse) {
 			return true;
 		} else {
 			return false;
 		}
 	}
-	
 
+	
 	async addAuthorizedOwner(newOwner: string) {
 		const adminWallet = this.adminWallet;
 		const contract = new Contract(this.contractAddress, this.abi, adminWallet);
@@ -384,11 +395,11 @@ export class WalletService {
 		await tx.wait();
 	}
 	async getBalance(address: string) {
-
-			// Get the balance from the net work
 			const contract = new ethers.Contract(this.contractAddress, this.abi, this.provider);
 			let balance = await contract.balanceOf(address);
-			await this.cache.set(`balance:${address}`, balance, 60);
+			await this.wallet_queue.add('get-balance',{
+				address
+			});
 		return Number(balance);
 	}
 	async burn(amount: Uint256, privateKey: string, address: string) {
@@ -396,6 +407,10 @@ export class WalletService {
 			const nguonWallet = new Wallet(privateKey, this.provider);
 			const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
 			const tx = await contract.burn(amount);
+			 await this.wallet_queue.add('burn-token',{
+				tx,
+				address
+			})
 			await tx.wait();
 			return true;
 		} catch (error) {
@@ -409,6 +424,11 @@ export class WalletService {
 			const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
 			// Populate the transaction object with the incremented nonce value. 
 			const tx = await contract.transfer(toAddress, amount);
+			await this.wallet_queue.add('transfer-token',{
+				tx,
+				toAddress,
+				amount,
+			})
 			tx.nonce++;
 			return true;
 		} catch (error) {
@@ -418,6 +438,10 @@ export class WalletService {
 	}
 	async generateNewWallet() {
 		const wallet = ethers.Wallet.createRandom();
+
+		await this.wallet_queue.add('create-wallet',{
+			wallet
+		})
 		console.log(wallet.privateKey);
 
 		return {

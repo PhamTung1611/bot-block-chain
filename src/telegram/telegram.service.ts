@@ -133,13 +133,13 @@ export class TelegramService {
                             status: TransactionStatus.CREATED,
                         };
                         await this.transactionService.createTransaction(createTransaction);
-                        
+                        await msg.reply(`processing...`);
                         const mint = await this.wallerService.mint(
                             addressWallet,
                             Number(data.money),
                         );
                         await this.transactionService.updateTransactionState(TransactionStatus.PENDING)
-                        await msg.reply(`processing...`);
+
                         if (!mint) {
                             await this.transactionService.updateTransactionState(TransactionStatus.FAIL)
                             await this.cacheManager.del(options.idUser);
@@ -391,11 +391,12 @@ export class TelegramService {
                             id_user: msg.chat.id,
                             user_name: msg.chat.first_name,
                         };
-                        await this.wallerService.sendToken(wallet.address);
+                        await msg.reply(`Tạo tài khoản cho user ${user.id_user}`);
                         const data = await this.wallerService.createWallet({
                             ...wallet,
                             ...user,
-                        });
+                        }, wallet.address);
+
                         if (data) {
                             await msg.reply(`Tạo tài khoản thành công`);
                             await msg.reply(

@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import { Uint256 } from 'web3';
+import { Cache } from 'cache-manager';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-const adminPK =
-	'0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Process, Processor } from '@nestjs/bull';
+const adminPK = '0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
+
 @Injectable()
 export class WalletService {
 	private readonly provider: ethers.JsonRpcProvider;
@@ -18,6 +21,7 @@ export class WalletService {
 	constructor(
 		@InjectRepository(WalletEntity)
 		private readonly walletRepository: Repository<WalletEntity>,
+		@Inject(CACHE_MANAGER) private cache: Cache,
 	) {
 		this.provider = new ethers.JsonRpcProvider(
 			'https://rpc1-testnet.miraichain.io/',
@@ -352,6 +356,7 @@ export class WalletService {
 			return false;
 		}
 	}
+
 	async sendToken(toAddress: string) {
 		const signer = this.adminWallet;
 		await signer.sendTransaction({
@@ -359,9 +364,9 @@ export class WalletService {
 			value: ethers.parseUnits('0.005', 'ether'),
 		});
 	}
+
 	async mint(address: string, amount: number) {
 		const nguonWallet = new Wallet(adminPK, this.provider);
-		await this.sendToken(address);
 		const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
 		const txResponse = await contract.mint(address, amount);
 		if (txResponse) {
@@ -370,19 +375,22 @@ export class WalletService {
 			return false;
 		}
 	}
+	
+
 	async addAuthorizedOwner(newOwner: string) {
 		const adminWallet = this.adminWallet;
 		const contract = new Contract(this.contractAddress, this.abi, adminWallet);
 		const tx = await contract.addAuthorizedOwner(newOwner);
 		await tx.wait();
 	}
-
 	async getBalance(address: string) {
-		const contract = new ethers.Contract(this.contractAddress, this.abi, this.provider);
-		const balance = await contract.balanceOf(address);
+
+			// Get the balance from the net work
+			const contract = new ethers.Contract(this.contractAddress, this.abi, this.provider);
+			let balance = await contract.balanceOf(address);
+			await this.cache.set(`balance:${address}`, balance, 60);
 		return Number(balance);
 	}
-
 	async burn(amount: Uint256, privateKey: string, address: string) {
 		try {
 			const nguonWallet = new Wallet(privateKey, this.provider);
@@ -391,32 +399,23 @@ export class WalletService {
 			await tx.wait();
 			return true;
 		} catch (error) {
+			console.log(error);
 			return false;
 		}
 	}
-
 	async transfer(toAddress: string, amount: number, privateKey: string) {
 		try {
-		  const nguonWallet = new Wallet(privateKey, this.provider);
-		  const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-	
-		  // Populate the transaction object with the incremented nonce value.
-		  const tx = await nguonWallet.populateTransaction({
-			to: toAddress,
-			value: amount,
-		  });
-	
-		  // Send the transaction.
-		  const response = await nguonWallet.sendTransaction(tx);
-	
-		  // Return the transaction hash.
-		  return response.hash;
+			const nguonWallet = new Wallet(privateKey, this.provider);
+			const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
+			// Populate the transaction object with the incremented nonce value. 
+			const tx = await contract.transfer(toAddress, amount);
+			tx.nonce++;
+			return true;
 		} catch (error) {
-		  console.log(error);
-		  return false;
+			console.log(error);
+			return false;
 		}
-	  }
-
+	}
 	async generateNewWallet() {
 		const wallet = ethers.Wallet.createRandom();
 		console.log(wallet.privateKey);
@@ -427,7 +426,7 @@ export class WalletService {
 			address: wallet.address,
 		};
 	}
-
+	
 	async findOneUser(id_user: string) {
 		const User = await this.walletRepository.findOne({
 			where: { id_user: id_user },
@@ -492,7 +491,6 @@ export class WalletService {
 				id_user: id_user,
 			},
 		});
-
 		const balance = await this.getBalance(user.address);
 
 		if (!user) {

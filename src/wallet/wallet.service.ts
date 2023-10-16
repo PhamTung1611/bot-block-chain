@@ -7,8 +7,7 @@ import { Contract, ethers, Wallet } from 'ethers';
 import { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import Redis from 'ioredis';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+
 const adminPK =
   '0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
 
@@ -22,9 +21,6 @@ export class WalletService {
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
-
-    @InjectQueue('wallet:optimize')
-    private readonly wallet_queue: Queue,
   ) {
     this.provider = new ethers.JsonRpcProvider(
       'https://rpc1-testnet.miraichain.io/',
@@ -376,12 +372,7 @@ export class WalletService {
     const txResponse = await contract.mint(
       address,
       this.convertToEther(amount),
-    );
-    await this.wallet_queue.add('mint-token', {
-      txResponse,
-      address,
-    });
-
+    )
     if (txResponse) {
       return true;
     } else {
@@ -402,9 +393,6 @@ export class WalletService {
       this.provider,
     );
     const balance = await contract.balanceOf(address);
-    await this.wallet_queue.add('get-balance', {
-      address,
-    });
     return Number(ethers.formatEther(balance));
   }
 
@@ -417,10 +405,6 @@ export class WalletService {
         nguonWallet,
       );
       const tx = await contract.burn(this.convertToEther(Number(amount)));
-      await this.wallet_queue.add('burn-token', {
-        tx,
-        address,
-      });
       await tx.wait();
       return true;
     } catch (error) {
@@ -441,10 +425,6 @@ export class WalletService {
         toAddress,
         this.convertToEther(amount),
       );
-      await this.wallet_queue.add('transfer-token', {
-        tx,
-        toAddress,
-      });
       tx.nonce++;
       return true;
     } catch (error) {
@@ -454,10 +434,6 @@ export class WalletService {
   }
   async generateNewWallet() {
     const wallet = ethers.Wallet.createRandom();
-
-    await this.wallet_queue.add('create-wallet', {
-      wallet,
-    });
     console.log(wallet.privateKey);
 
     return {

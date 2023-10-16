@@ -4,7 +4,7 @@ import { WalletEntity } from './wallet.entity';
 import { WalletService } from './wallet.service';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
-import { ImageOptimizationProcessor } from './wallet.processor';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([WalletEntity]),
@@ -14,7 +14,7 @@ import { ImageOptimizationProcessor } from './wallet.processor';
       prefix: 'telegram-bot',
     }),
   ],
-  providers: [WalletService, ImageOptimizationProcessor],
+  providers: [WalletService],
   exports: [ConfigModule, BullModule],
 })
 export class WalletModule {}

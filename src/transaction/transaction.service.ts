@@ -33,7 +33,7 @@ export class TransactionService {
   }
   async findLatestTransaction(): Promise<TransactionEntity | undefined> {
     const transactions = await this.transactionRepository.find({
-      order: { create_date: 'DESC' },
+      order: { createdDate: 'DESC' },
       take: 1,
     });
 

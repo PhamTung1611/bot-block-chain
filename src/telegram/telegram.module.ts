@@ -11,8 +11,7 @@ import { WalletModule } from 'src/wallet/wallet.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TransactionEntity]),
-    TypeOrmModule.forFeature([WalletEntity]),
+    TypeOrmModule.forFeature([TransactionEntity,WalletEntity]),
     CacheModule.register(),
     WalletModule,
   ],

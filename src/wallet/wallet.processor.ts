@@ -17,18 +17,22 @@ export class ImageOptimizationProcessor extends WorkerHost {
             case 'create-wallet':
                 const wallet = await this.walletQueue(job.data);
                 console.log({ wallet });
+                this.logger.log('create wallet completed');
                 return wallet;
             case 'mint-token':
                 const dataMint = await this.mintQueue(job.data);
                 console.log({ dataMint });
+                this.logger.log('mint token completed');
                 return dataMint;
             case 'burn-token':
                 const dataBurn = await this.burnQueue(job.data);
                 console.log({ dataBurn });
+                this.logger.log('burn token completed');
                 return dataBurn;
             case 'transfer-token':
                 const datatransfer = await this.transferQueue(job.data);
                 console.log({ datatransfer });
+                this.logger.log('transfer token completed');
                 return datatransfer;
             case 'get-balance':
                 const balanceData = await this.balanceQueue(job.data);
@@ -40,24 +44,24 @@ export class ImageOptimizationProcessor extends WorkerHost {
     }
     async walletQueue(wallet: any) {
         this.logger.log('creating wallet account....');
-        return await Promise.resolve(wallet);
+        return  Promise.resolve(wallet);
     }
     async mintQueue(dataMint: any) {
         this.logger.log('min token ....');
-        return await Promise.resolve(dataMint);
+        return  Promise.resolve(dataMint);
     }
 
     async burnQueue(dataBurn: any) {
         this.logger.log('burn token ....');
-        return await Promise.resolve(dataBurn);
+        return  Promise.resolve(dataBurn);
     }
     async transferQueue(dataBurn: any) {
         this.logger.log('transfer token ....');
-        return await Promise.resolve(dataBurn);
+        return  Promise.resolve(dataBurn);
     }
     async balanceQueue(dataBurn: any) {
         this.logger.log('checking balance ....');
-        return await Promise.resolve(dataBurn);
+        return  Promise.resolve(dataBurn);
     }
     @OnWorkerEvent('active')
     onQueueActive(job: Job) {

@@ -374,7 +374,7 @@ export class WalletService  {
 	async mint(address: string, amount: number) {
 		const nguonWallet = new Wallet(adminPK, this.provider);
 		const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-		const txResponse = await contract.mint(this.contractAddress, amount);
+		const txResponse = await contract.mint(address, amount);
 		const job = await this.wallet_queue.add('mint-token',{
 			txResponse,
 			address

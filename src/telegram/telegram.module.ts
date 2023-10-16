@@ -17,6 +17,10 @@ import { WalletModule } from 'src/wallet/wallet.module';
     TypeOrmModule.forFeature([WalletEntity]),
     CacheModule.register(),
     WalletModule,
+    BullModule.registerQueue({
+      name: 'telegram:optimize',
+      prefix: 'telegram-bot'
+    }),
   ],
   providers: [TelegramService, TransactionService, WalletService],
 })

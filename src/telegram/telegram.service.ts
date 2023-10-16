@@ -135,7 +135,7 @@ export class TelegramService {
                         await this.transactionService.createTransaction(createTransaction);
                         await msg.reply(`processing...`);
                         const mint = await this.wallerService.mint(
-                            addressWallet,
+                          addressWallet,
                             Number(data.money),
                         );
                         await this.transactionService.updateTransactionState(TransactionStatus.PENDING)
@@ -325,13 +325,13 @@ export class TelegramService {
                     };
                     //initialize Transaction and save to db
                     await this.transactionService.createTransaction(createTransaction);
+                    await msg.reply(`processing...`);
                     const checkStatus = await this.wallerService.sendMoneybyAddress(
                         options.idUser,
                         receiver,
                         money,
                     );
                     await this.transactionService.updateTransactionState(TransactionStatus.PENDING);
-                    await msg.reply(`processing...`);
                     if (checkStatus === TransactionStatus.SUCCESS && data.step === 2) {
                         await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS);
                         await msg.reply(`Chuyển tiền thành công`);

@@ -373,7 +373,10 @@ export class WalletService {
   async mint(address: string, amount: number) {
     const nguonWallet = new Wallet(adminPK, this.provider);
     const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
-    const txResponse = await contract.mint(address, amount);
+    const txResponse = await contract.mint(
+      address,
+      this.convertToEther(amount),
+    );
     await this.wallet_queue.add('mint-token', {
       txResponse,
       address,
@@ -402,8 +405,9 @@ export class WalletService {
     await this.wallet_queue.add('get-balance', {
       address,
     });
-    return Number(balance);
+    return Number(ethers.formatEther(balance));
   }
+
   async burn(amount: Uint256, privateKey: string, address: string) {
     try {
       const nguonWallet = new Wallet(privateKey, this.provider);
@@ -412,7 +416,7 @@ export class WalletService {
         this.abi,
         nguonWallet,
       );
-      const tx = await contract.burn(amount);
+      const tx = await contract.burn(this.convertToEther(Number(amount)));
       await this.wallet_queue.add('burn-token', {
         tx,
         address,
@@ -433,11 +437,13 @@ export class WalletService {
         nguonWallet,
       );
       // Populate the transaction object with the incremented nonce value.
-      const tx = await contract.transfer(toAddress, amount);
+      const tx = await contract.transfer(
+        toAddress,
+        this.convertToEther(amount),
+      );
       await this.wallet_queue.add('transfer-token', {
         tx,
         toAddress,
-        amount,
       });
       tx.nonce++;
       return true;
@@ -460,7 +466,9 @@ export class WalletService {
       address: wallet.address,
     };
   }
-
+  convertToEther(amount: number) {
+    return ethers.parseUnits(amount.toString(), 'ether');
+  }
   async findOneUser(id_user: string) {
     const User = await this.walletRepository.findOne({
       where: { id_user: id_user },

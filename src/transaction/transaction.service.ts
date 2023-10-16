@@ -21,6 +21,7 @@ export class TransactionService {
     }
   }
   async updateTransactionState(status: TransactionStatus): Promise<boolean> {
+    // update theo id, k được phép update transaction cuối trong mọi trường hợp
     const lastetTransaction = await this.findLatestTransaction();
     lastetTransaction.status = status;
     const saveTransaction =
@@ -32,6 +33,7 @@ export class TransactionService {
     }
   }
   async findLatestTransaction(): Promise<TransactionEntity | undefined> {
+    // lấy 1 bản ghi thì dùng findOne not find
     const transactions = await this.transactionRepository.find({
       order: { create_date: 'DESC' },
       take: 1,

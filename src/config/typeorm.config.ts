@@ -3,6 +3,7 @@ import { TransactionEntity } from 'src/transaction/transaction.entity';
 import { WalletEntity } from 'src/wallet/wallet.entity';
 import { config } from 'dotenv';
 config();
+// sử dụng config service
 export const typeOrmConfig: TypeOrmModuleOptions = {
   type: 'postgres',
   host: process.env.POSTGRES_HOST,

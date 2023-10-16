@@ -95,6 +95,8 @@ export class TelegramService {
         this.keyboardMarkup,
       );
     }
+    // Lưu rõ ràng từng action, ở đây chỉ k lưu lại user đang làm hành động nào
+    // Tách phần xử lý này ra, code dài
     switch (data.action) {
       case Action.DEPOSIT:
         if (data.step === 1) {
@@ -131,6 +133,7 @@ export class TelegramService {
             };
             await this.transactionService.createTransaction(createTransaction);
             await msg.reply(`processing...`);
+            // lỗi Big Number
             const mint = await this.wallerService.mint(
               addressWallet,
               Number(data.money),

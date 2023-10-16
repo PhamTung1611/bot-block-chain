@@ -2,6 +2,8 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 
+// Chưa rõ tác dụng của queue, tác dụng k thực tế, k phù hợp sử dụng queue
+
 @Processor('wallet:optimize', {
   concurrency: 50,
   limiter: {

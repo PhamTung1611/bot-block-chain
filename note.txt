@@ -1,0 +1,5 @@
+Tìm hiểu và áp dụng đúng git flow
+Tổ chức module đang không hợp lý
+Tên biến đồng nhất quy chuẩn camelCase và ngôn ngữ tiếng anh
+Sai quy tắc sử dụng module trong nestjs
+Cách sử dụng queue chưa hợp lý

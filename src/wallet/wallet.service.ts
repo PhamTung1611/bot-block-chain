@@ -6,7 +6,6 @@ import { WalletStatus } from './wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-import Redis from 'ioredis';
 
 const adminPK =
   '0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
@@ -17,7 +16,6 @@ export class WalletService {
   private readonly contractAddress: string;
   private readonly abi: any;
   private readonly adminWallet: any;
-  private redisClient: Redis;
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,

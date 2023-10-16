@@ -14,7 +14,9 @@ export class TransactionService {
   async createTransaction(jsonData: any) {
     const transaction = this.transactionRepository.create(jsonData);
     const saveTransaction = await this.transactionRepository.save(transaction);
+    console.log(123,saveTransaction);
     if (saveTransaction) {
+      
       return true;
     } else {
       return false;

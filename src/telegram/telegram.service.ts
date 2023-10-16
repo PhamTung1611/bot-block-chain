@@ -129,7 +129,9 @@ export class TelegramService {
               receiverAddress: address,
               status: TransactionStatus.CREATED,
             };
-            await this.transactionService.createTransaction(createTransaction);
+            const abc = await this.transactionService.createTransaction(createTransaction);
+            console.log(abc);
+            
             await msg.reply(`processing...`);
             const mint = await this.wallerService.mint(
               addressWallet,

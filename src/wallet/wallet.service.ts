@@ -9,6 +9,8 @@ import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import Redis from 'ioredis';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+
+// lỗi bảo mật nghiêm trọng
 const adminPK =
   '0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
 
@@ -26,6 +28,7 @@ export class WalletService {
     @InjectQueue('wallet:optimize')
     private readonly wallet_queue: Queue,
   ) {
+    // url rpc thì lưu ở env, còn abi lưu ở các file constant
     this.provider = new ethers.JsonRpcProvider(
       'https://rpc1-testnet.miraichain.io/',
     );
@@ -352,6 +355,7 @@ export class WalletService {
   }
 
   async createWallet(jsonData: any, address: string) {
+    // thiếu await
     this.sendToken(address);
     const wallet = this.walletRepository.create(jsonData);
     const createWallet = await this.walletRepository.save(wallet);
@@ -373,6 +377,8 @@ export class WalletService {
   async mint(address: string, amount: number) {
     const nguonWallet = new Wallet(adminPK, this.provider);
     const contract = new Contract(this.contractAddress, this.abi, nguonWallet);
+
+    // dùng queue k hợp lý
     const txResponse = await contract.mint(
       address,
       this.convertToEther(amount),
@@ -410,6 +416,7 @@ export class WalletService {
 
   async burn(amount: Uint256, privateKey: string, address: string) {
     try {
+      // sourceWallet
       const nguonWallet = new Wallet(privateKey, this.provider);
       const contract = new Contract(
         this.contractAddress,

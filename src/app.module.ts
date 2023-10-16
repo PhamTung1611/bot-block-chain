@@ -11,6 +11,8 @@ import { typeOrmConfig } from './config/typeorm.config';
 import { BullModule } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
+
+// Xem lại các config CacheModule, BullModule, ConfigModule, TypeOrmModule
 @Module({
   imports: [
     TypeOrmModule.forRoot(typeOrmConfig),

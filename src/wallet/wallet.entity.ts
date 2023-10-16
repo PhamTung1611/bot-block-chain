@@ -23,6 +23,7 @@ export class WalletEntity {
   @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
   create_date: Date;
 
+  // duplicate PrimaryGeneratedColumn
   @BeforeInsert()
   generateUUID() {
     this.id = uuid();

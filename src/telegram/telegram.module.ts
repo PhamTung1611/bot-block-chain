@@ -8,7 +8,6 @@ import { TransactionService } from 'src/transaction/transaction.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { WalletEntity } from 'src/wallet/wallet.entity';
 import { BullModule } from '@nestjs/bull';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import { WalletModule } from 'src/wallet/wallet.module';
 
 @Module({
@@ -19,7 +18,7 @@ import { WalletModule } from 'src/wallet/wallet.module';
     WalletModule,
     BullModule.registerQueue({
       name: 'telegram:optimize',
-      prefix: 'telegram-bot'
+      prefix: 'telegram-bot',
     }),
   ],
   providers: [TelegramService, TransactionService, WalletService],

@@ -23,7 +23,8 @@ export class TransactionService {
   async updateTransactionState(status: TransactionStatus): Promise<boolean> {
     const lastetTransaction = await this.findLatestTransaction();
     lastetTransaction.status = status;
-    const saveTransaction = await this.transactionRepository.save(lastetTransaction);
+    const saveTransaction =
+      await this.transactionRepository.save(lastetTransaction);
     if (saveTransaction) {
       return true;
     } else {

@@ -223,6 +223,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         } else {
           await this.transactionService.updateTransactionState(
             TransactionStatus.SUCCESS, transaction.id
@@ -233,6 +234,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         }
       }
     }
@@ -281,6 +283,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         }
         const privateKey = await this.wallerService.checkPrivateKeyByID(
           options.idUser,
@@ -304,6 +307,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         }
         await this.transactionService.updateTransactionState(
           TransactionStatus.SUCCESS, transaction.id
@@ -314,6 +318,7 @@ export class TelegramService {
           'Tôi có thể giúp gì tiếp cho bạn',
           this.keyboardMarkup,
         );
+        return;
       }
     }
   }
@@ -365,12 +370,14 @@ export class TelegramService {
         await msg.reply(`Địa chỉ người dùng không tồn tại`);
         await this.cacheManager.del(options.idUser);
         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
+        return;
       }
       if (data.action === Action.TRANSFER_BY_ADDRESS) {
         data.action = Action.SEND_MONEY_ADDRESS;
         data.step = 3;
         data.receiver = address;
         await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
+        return;
       }
     } else {
       await msg.reply(`Có gì đó không ổn vui lòng thử lại`);

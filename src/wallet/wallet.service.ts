@@ -8,6 +8,8 @@ import { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { abiChain } from 'src/constants/abis/abichain';
 import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bull';
+import { InjectQueue } from '@nestjs/bull';
 
 @Injectable()
 export class WalletService {
@@ -15,9 +17,10 @@ export class WalletService {
   private readonly contractAddress: string;
   private readonly adminWallet: any;
   constructor(
+    @InjectQueue('walletOptimize') private readonly walletQueue: Queue,
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
-    private configService:ConfigService
+    private configService: ConfigService,
   ) {
     this.provider = new ethers.JsonRpcProvider(
       configService.get('RPC')
@@ -44,19 +47,10 @@ export class WalletService {
       value: ethers.parseUnits('0.01', 'ether'),
     });
   }
-
   async mint(address: string, amount: number) {
-    const sourceWallet = new Wallet(this.configService.get('adminPrivateKey'), this.provider);
-    const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
-    const txResponse = await contract.mint(
-      address,
-      this.convertToEther(amount),
-    )
-    if (txResponse) {
-      return true;
-    } else {
-      return false;
-    }
+    const job = await this.walletQueue.add('mint-token', { address, amount })
+    console.log(job);
+    return job;
   }
 
   async addAuthorizedOwner(newOwner: string) {
@@ -76,40 +70,14 @@ export class WalletService {
   }
 
   async burn(amount: Uint256, privateKey: string, address: string) {
-    try {
-      const sourceWallet = new Wallet(privateKey, this.provider);
-      const contract = new Contract(
-        this.contractAddress,
-        abiChain,
-        sourceWallet,
-      );
-      const tx = await contract.burn(this.convertToEther(Number(amount)));
-      await tx.wait();
-      return true;
-    } catch (error) {
-      console.log(error);
-      return false;
-    }
+    const job = await this.walletQueue.add('burn-token', { address, amount ,privateKey})
+    console.log(job);
+    return job;
   }
   async transfer(toAddress: string, amount: number, privateKey: string) {
-    try {
-      const sourceWallet = new Wallet(privateKey, this.provider);
-      const contract = new Contract(
-        this.contractAddress,
-        abiChain,
-        sourceWallet,
-      );
-      // Populate the transaction object with the incremented nonce value.
-      const tx = await contract.transfer(
-        toAddress,
-        this.convertToEther(amount),
-      );
-      tx.nonce++;
-      return true;
-    } catch (error) {
-      console.log(error);
-      return false;
-    }
+    const job = await this.walletQueue.add('transfer', { toAddress,amount,privateKey})
+    console.log(job.data);
+    return job;
   }
   async generateNewWallet() {
     const wallet = ethers.Wallet.createRandom();

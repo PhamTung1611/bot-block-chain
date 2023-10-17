@@ -7,11 +7,23 @@ import { TransactionEntity } from 'src/transaction/transaction.entity';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { WalletEntity } from 'src/wallet/wallet.entity';
+import { BullModule } from '@nestjs/bull';
+import { WalletModule } from 'src/wallet/wallet.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TransactionEntity,WalletEntity]),
     CacheModule.register(),
+    WalletModule,
+    BullModule.forRoot({
+      redis: {
+        host: 'localhost',
+        port: 6379,
+      },
+    }),
+    BullModule.registerQueue({
+      name: 'walletOptimize',
+    }),
   ],
   providers: [TelegramService, TransactionService, WalletService],
 })

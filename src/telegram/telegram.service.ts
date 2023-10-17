@@ -8,6 +8,8 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 
 interface DataCache {
   action: string;
@@ -52,6 +54,7 @@ export class TelegramService {
   ]);
 
   constructor(
+    @InjectQueue('walletOptimize') private readonly walletQueue: Queue,
     private transactionService: TransactionService,
     private wallerService: WalletService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
@@ -223,6 +226,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         } else {
           await this.transactionService.updateTransactionState(
             TransactionStatus.SUCCESS, transaction.id
@@ -233,6 +237,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         }
       }
     }
@@ -281,6 +286,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         }
         const privateKey = await this.wallerService.checkPrivateKeyByID(
           options.idUser,
@@ -304,6 +310,7 @@ export class TelegramService {
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,
           );
+          return;
         }
         await this.transactionService.updateTransactionState(
           TransactionStatus.SUCCESS, transaction.id
@@ -314,6 +321,7 @@ export class TelegramService {
           'Tôi có thể giúp gì tiếp cho bạn',
           this.keyboardMarkup,
         );
+        return;
       }
     }
   }
@@ -473,7 +481,7 @@ export class TelegramService {
             ...wallet,
             ...user,
           },
-          wallet.address,
+          wallet.address
         );
 
         if (data) {
@@ -503,7 +511,9 @@ export class TelegramService {
       this.setCache(options, Action.DEPOSIT, 1);
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     } else {
+      await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.user_id);
+      this.setCache(options, Action.WITHDRAW, 1);
     }
   }
   async handleWithDrawButton(msg: any, options: any, data: DataCache, checkUser: any) {

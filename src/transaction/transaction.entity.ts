@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
 import { TransactionStatus } from './enum/transaction.enum';
 
 @Entity()
@@ -6,21 +6,21 @@ export class TransactionEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column('text')
   senderAddress: string;
 
-  @Column()
+  @Column('text')
   receiverAddress: string;
 
-  @Column()
+  @Column('text')
   balance: string;
 
-  @Column()
+  @Column('text')
   type: string;
 
   @Column()
   status: TransactionStatus;
 
-  @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
-  create_date: Date;
+  @CreateDateColumn()
+  createdDate: Date;
 }

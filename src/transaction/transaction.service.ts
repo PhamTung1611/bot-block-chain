@@ -9,35 +9,34 @@ export class TransactionService {
   constructor(
     @InjectRepository(TransactionEntity)
     private readonly transactionRepository: Repository<TransactionEntity>,
-  ) {}
+  ) { }
 
   async createTransaction(jsonData: any) {
     const transaction = this.transactionRepository.create(jsonData);
     const saveTransaction = await this.transactionRepository.save(transaction);
-    if (saveTransaction) {
-      return true;
+    if (transaction) {
+      return Object(saveTransaction);
     } else {
-      return false;
+      return undefined;
     }
   }
-  async updateTransactionState(status: TransactionStatus): Promise<boolean> {
-    const lastetTransaction = await this.findLatestTransaction();
-    lastetTransaction.status = status;
+  async updateTransactionState(status: TransactionStatus,id:string): Promise<boolean> {
+    const transaction = await this.findTransactionById(id);
+    transaction.status = status;
     const saveTransaction =
-      await this.transactionRepository.save(lastetTransaction);
+      await this.transactionRepository.save(transaction);
     if (saveTransaction) {
       return true;
     } else {
       return false;
     }
   }
-  async findLatestTransaction(): Promise<TransactionEntity | undefined> {
-    const transactions = await this.transactionRepository.find({
-      order: { create_date: 'DESC' },
-      take: 1,
+  async findTransactionById(id: string): Promise<TransactionEntity | undefined> {
+    const transaction = await this.transactionRepository.findOneBy({
+      id: id
     });
 
-    return transactions[0];
+    return transaction;
   }
   async getListHistory(address: string) {
     const query = await this.transactionRepository

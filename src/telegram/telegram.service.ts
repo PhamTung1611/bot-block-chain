@@ -503,7 +503,10 @@ export class TelegramService {
       this.setCache(options, Action.DEPOSIT, 1);
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     } else {
+      await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.user_id);
+      this.setCache(options, Action.DEPOSIT, 1);
+      await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     }
   }
   async handleWithDrawButton(msg: any, options: any, data: DataCache, checkUser: any) {

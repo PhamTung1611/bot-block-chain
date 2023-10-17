@@ -13,7 +13,6 @@ import { WalletModule } from 'src/wallet/wallet.module';
   imports: [
     TypeOrmModule.forFeature([TransactionEntity,WalletEntity]),
     CacheModule.register(),
-    WalletModule,
   ],
   providers: [TelegramService, TransactionService, WalletService],
 })

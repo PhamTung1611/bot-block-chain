@@ -14,7 +14,6 @@ import { typeOrmConfig } from './config/typeorm.config';
     ConfigModule,
     TelegramModule,
     TransactionModule,
-    WalletModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: `.env.${process.env.NODE_ENV}`,

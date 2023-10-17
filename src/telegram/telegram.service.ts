@@ -129,8 +129,7 @@ export class TelegramService {
               receiverAddress: address,
               status: TransactionStatus.CREATED,
             };
-            const abc = await this.transactionService.createTransaction(createTransaction);
-            console.log(abc);
+            const transaction = await this.transactionService.createTransaction(createTransaction);
             
             await msg.reply(`processing...`);
             const mint = await this.wallerService.mint(
@@ -138,12 +137,12 @@ export class TelegramService {
               Number(data.money),
             );
             await this.transactionService.updateTransactionState(
-              TransactionStatus.PENDING,
+              TransactionStatus.PENDING,transaction.id
             );
 
             if (!mint) {
               await this.transactionService.updateTransactionState(
-                TransactionStatus.FAIL,
+                TransactionStatus.FAIL,transaction.id
               );
               await this.cacheManager.del(options.idUser);
               await msg.reply(`Nạp tiền thất bại`);
@@ -153,7 +152,7 @@ export class TelegramService {
               );
             } else {
               await this.transactionService.updateTransactionState(
-                TransactionStatus.SUCCESS,
+                TransactionStatus.SUCCESS,transaction.id
               );
               await this.cacheManager.del(options.idUser);
               await msg.reply(`Nạp tiền thành công`);
@@ -200,7 +199,7 @@ export class TelegramService {
               receiverAddress: address,
               status: TransactionStatus.CREATED,
             };
-            await this.transactionService.createTransaction(createTransaction);
+           const transaction= await this.transactionService.createTransaction(createTransaction);
             const balance = await this.wallerService.getBalance(address);
             if (Number(balance) < Number(data.money)) {
               await this.cacheManager.del(options.idUser);
@@ -215,7 +214,7 @@ export class TelegramService {
               options.idUser,
             );
             await this.transactionService.updateTransactionState(
-              TransactionStatus.PENDING,
+              TransactionStatus.PENDING,transaction.id
             );
             await msg.reply(`processing....`);
 
@@ -226,7 +225,7 @@ export class TelegramService {
             );
             if (!burn) {
               await this.transactionService.updateTransactionState(
-                TransactionStatus.FAIL,
+                TransactionStatus.FAIL,transaction.id
               );
               await msg.reply(`Rút tiền thất bại`);
               await msg.reply(
@@ -236,7 +235,7 @@ export class TelegramService {
               break;
             }
             await this.transactionService.updateTransactionState(
-              TransactionStatus.SUCCESS,
+              TransactionStatus.SUCCESS,transaction.id
             );
             await this.cacheManager.del(options.idUser);
             await msg.reply(`Rút tiền thành công`);
@@ -335,7 +334,7 @@ export class TelegramService {
             status: TransactionStatus.CREATED,
           };
           //initialize Transaction and save to db
-          await this.transactionService.createTransaction(createTransaction);
+          const transaction= await this.transactionService.createTransaction(createTransaction);
           await msg.reply(`processing...`);
           const checkStatus = await this.wallerService.sendMoneybyAddress(
             options.idUser,
@@ -343,11 +342,11 @@ export class TelegramService {
             money,
           );
           await this.transactionService.updateTransactionState(
-            TransactionStatus.PENDING,
+            TransactionStatus.PENDING,transaction.id
           );
           if (checkStatus === TransactionStatus.SUCCESS && data.step === 2) {
             await this.transactionService.updateTransactionState(
-              TransactionStatus.SUCCESS,
+              TransactionStatus.SUCCESS,transaction.id
             );
             await msg.reply(`Chuyển tiền thành công`);
             data.step = 1;
@@ -372,7 +371,7 @@ export class TelegramService {
           } else {
             await msg.reply(`Chuyển tiền thất bại`, this.keyTransferMethod);
             await this.transactionService.updateTransactionState(
-              TransactionStatus.FAIL,
+              TransactionStatus.FAIL,transaction.id
             );
             this.cacheManager.del(options.idUser);
             break;
@@ -450,6 +449,9 @@ export class TelegramService {
           await msg.reply('Bạn muốn nạp bao nhiêu tiền');
         } else {
           await this.cacheManager.del(options.user_id);
+        }
+        if (data.action !== '') {
+          await msg.reply('Testing');
         }
         break;
       case Button.HISTORY:
@@ -546,7 +548,17 @@ export class TelegramService {
           );
           await msg.reply('Bạn muốn rút bao nhiêu tiền');
         } else {
+          await msg.reply(`Canceling ${data.action}`);
           await this.cacheManager.del(options.user_id);
+          await this.cacheManager.set(
+            options.user_id,
+            {
+              action: Action.WITHDRAW,
+              step: 1,
+            },
+            30000,
+          );
+          await msg.reply('Bạn muốn rút bao nhiêu tiền');
         }
         break;
       case Button.CANCEL:
@@ -564,6 +576,7 @@ export class TelegramService {
           this.keyboardMarkup,
         );
         break;
-    }
+    
+      } 
   }
 }

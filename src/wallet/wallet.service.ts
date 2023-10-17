@@ -9,8 +9,6 @@ import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { abiChain } from 'src/constants/abis/abichain';
 import { ConfigService } from '@nestjs/config';
 
-// const adminPK =  this.configService.get<string>('adminPrivateKey');
-
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;

@@ -8,8 +8,6 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
 
 interface DataCache {
   action: string;
@@ -54,7 +52,6 @@ export class TelegramService {
   ]);
 
   constructor(
-    @InjectQueue('walletOptimize') private readonly walletQueue: Queue,
     private transactionService: TransactionService,
     private wallerService: WalletService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
@@ -373,12 +370,14 @@ export class TelegramService {
         await msg.reply(`Địa chỉ người dùng không tồn tại`);
         await this.cacheManager.del(options.idUser);
         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
+        return;
       }
       if (data.action === Action.TRANSFER_BY_ADDRESS) {
         data.action = Action.SEND_MONEY_ADDRESS;
         data.step = 3;
         data.receiver = address;
         await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
+        return;
       }
     } else {
       await msg.reply(`Có gì đó không ổn vui lòng thử lại`);
@@ -481,7 +480,7 @@ export class TelegramService {
             ...wallet,
             ...user,
           },
-          wallet.address
+          wallet.address,
         );
 
         if (data) {
@@ -513,7 +512,8 @@ export class TelegramService {
     } else {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.user_id);
-      this.setCache(options, Action.WITHDRAW, 1);
+      this.setCache(options, Action.DEPOSIT, 1);
+      await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     }
   }
   async handleWithDrawButton(msg: any, options: any, data: DataCache, checkUser: any) {

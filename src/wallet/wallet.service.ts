@@ -10,6 +10,7 @@ import { abiChain } from 'src/constants/abis/abichain';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bull';
 import { InjectQueue } from '@nestjs/bull';
+import { Resolver } from 'dns';
 
 @Injectable()
 export class WalletService {
@@ -60,13 +61,9 @@ export class WalletService {
     await tx.wait();
   }
   async getBalance(address: string) {
-    const contract = new ethers.Contract(
-      this.contractAddress,
-      abiChain,
-      this.provider,
-    );
-    const balance = await contract.balanceOf(address);
-    return Number(ethers.formatEther(balance));
+    const job = await this.walletQueue.add('get-balance', { address });
+  
+    return job.returnvalue;
   }
 
   async burn(amount: Uint256, privateKey: string, address: string) {
@@ -136,6 +133,7 @@ export class WalletService {
       return WalletStatus.NOT_FOUND;
     }
     const balance = await this.getBalance(sender.address);
+    console.log(balance)
     if (balance < money) {
       return WalletStatus.NOT_ENOUGH_FUND;
     }

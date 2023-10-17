@@ -36,65 +36,65 @@ export class WalletProcessor {
         }
     }
     @Process('burn-token')
-    async burnToken(job: any){
-        const {amount,privateKey} = job.data;
+    async burnToken(job: any) {
+        const { amount, privateKey } = job.data;
         try {
             const sourceWallet = new Wallet(privateKey, this.provider);
             const contract = new Contract(
-              this.contractAddress,
-              abiChain,
-              sourceWallet,
+                this.contractAddress,
+                abiChain,
+                sourceWallet,
             );
             await contract.burn(this.convertToEther(Number(amount)));
             return true;
-          } catch (error) {
+        } catch (error) {
             console.log(error);
             return false;
-          }
+        }
     }
     @Process('generate-wallet')
-    async generateNewWallet(){
+    async generateNewWallet(job: any) {
         const wallet = ethers.Wallet.createRandom();
         console.log(wallet.privateKey);
-    
+
         return {
-          privateKey: wallet.privateKey,
-          publicKey: wallet.publicKey,
-          address: wallet.address,
+            privateKey: wallet.privateKey,
+            publicKey: wallet.publicKey,
+            address: wallet.address,
         };
     }
     @Process('get-balance')
-    async getBalance(job: any){
-        const {address}=job.data;
+    async getBalance(job: any) {
+        const { address } = job.data;
         const contract = new ethers.Contract(
             this.contractAddress,
             abiChain,
             this.provider,
-          );
-          const balance = await contract.balanceOf(address)
-          return Number(ethers.formatEther(balance));
+        );
+        const balance = Number(ethers.formatEther(await contract.balanceOf(address))).toString();
+        return balance;
     }
     @Process('transfer')
-    async transfer(job:any){
-        const {toAddress,amount,privateKey} = job.data;
+    async transfer(job: any) {
+        const { toAddress, amount, privateKey } = job.data;
         try {
             const sourceWallet = new Wallet(privateKey, this.provider);
             const contract = new Contract(
-              this.contractAddress,
-              abiChain,
-              sourceWallet,
+                this.contractAddress,
+                abiChain,
+                sourceWallet,
             );
 
             // Populate the transaction object with the incremented nonce value.
             const tx = await contract.transfer(
-              toAddress,
-              this.convertToEther(amount),
+                toAddress,
+                this.convertToEther(amount),
             );
             tx.nonce++;
             return true;
-          } catch (error) {
+        } catch (error) {
             console.log(error);
             return false;
-          }
+        }
     }
 }

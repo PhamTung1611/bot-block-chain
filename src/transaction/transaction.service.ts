@@ -20,7 +20,7 @@ export class TransactionService {
       return undefined;
     }
   }
-  async updateTransactionState(status: TransactionStatus,id:string): Promise<boolean> {
+  async updateTransactionState(status: TransactionStatus, id: string): Promise<boolean> {
     const transaction = await this.findTransactionById(id);
     transaction.status = status;
     const saveTransaction =
@@ -65,3 +65,4 @@ export class TransactionService {
     return query;
   }
 }
+

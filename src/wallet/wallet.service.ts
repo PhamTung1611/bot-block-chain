@@ -17,7 +17,7 @@ export class WalletService {
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
-    private configService:ConfigService
+    private configService: ConfigService
   ) {
     this.provider = new ethers.JsonRpcProvider(
       configService.get('RPC')
@@ -27,7 +27,7 @@ export class WalletService {
   }
 
   async createWallet(jsonData: any, address: string) {
-    this.sendToken(address);
+    await this.sendToken(address);
     const wallet = this.walletRepository.create(jsonData);
     const createWallet = await this.walletRepository.save(wallet);
     if (createWallet) {
@@ -36,7 +36,7 @@ export class WalletService {
       return false;
     }
   }
-  
+
   async sendToken(toAddress: string) {
     const signer = await this.adminWallet;
     await signer.sendTransaction({

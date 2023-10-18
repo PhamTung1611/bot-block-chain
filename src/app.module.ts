@@ -7,10 +7,11 @@ import { TelegramModule } from './telegram/telegram.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { WalletModule } from './wallet/wallet.module';
 import { ConfigModule } from '@nestjs/config';
-import { typeOrmConfig } from './config/typeorm.config';
+import { DatabaseConfig } from './config/typeorm.config';
+// import { typeOrmConfig } from './config/typeorm.config';
 @Module({
   imports: [
-    TypeOrmModule.forRoot(typeOrmConfig),
+    TypeOrmModule.forRootAsync({useClass:DatabaseConfig}),
     ConfigModule,
     TelegramModule,
     TransactionModule,

@@ -279,6 +279,9 @@ export class TelegramService {
         if (Number(balance) < Number(data.money)) {
           await this.cacheManager.del(options.idUser);
           await msg.reply(`Rút tiền thất bại`);
+          await this.transactionService.updateTransactionState(
+            TransactionStatus.FAIL, transaction.id
+          );
           await msg.reply(
             'Tôi có thể giúp gì tiếp cho bạn',
             this.keyboardMarkup,

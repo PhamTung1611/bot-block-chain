@@ -20,12 +20,12 @@ export class TransactionService {
       return undefined;
     }
   }
-  async updateTransactionState(status: TransactionStatus,id:string): Promise<boolean> {
+  async updateTransactionState(status: TransactionStatus, id: string): Promise<boolean> {
     const transaction = await this.findTransactionById(id);
-    transaction.status = status;
-    const saveTransaction =
-      await this.transactionRepository.save(transaction);
-
+    // transaction.status = status;
+    // const saveTransaction =
+    //   await this.transactionRepository.save(transaction);
+    const saveTransaction = this.transactionRepository.update(transaction.id, { status: status });
     if (saveTransaction) {
       return true;
     } else {

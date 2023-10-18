@@ -36,7 +36,7 @@ export class WalletService {
       return false;
     }
   }
-
+  
   async sendToken(toAddress: string) {
     const signer = await this.adminWallet;
     await signer.sendTransaction({

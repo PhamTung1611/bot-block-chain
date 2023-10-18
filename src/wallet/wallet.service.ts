@@ -36,12 +36,12 @@ export class WalletService {
       return false;
     }
   }
-
+  
   async sendToken(toAddress: string) {
     const signer = await this.adminWallet;
     await signer.sendTransaction({
       to: toAddress,
-      value: ethers.parseUnits('0.005', 'ether'),
+      value: ethers.parseUnits('0.01', 'ether'),
     });
   }
 

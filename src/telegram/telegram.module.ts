@@ -7,22 +7,28 @@ import { TransactionEntity } from 'src/transaction/transaction.entity';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { WalletEntity } from 'src/wallet/wallet.entity';
-import { BullModule } from '@nestjs/bull';
+
 import { WalletModule } from 'src/wallet/wallet.module';
+import { BullModule } from '@nestjs/bullmq';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TransactionEntity,WalletEntity]),
     CacheModule.register(),
     WalletModule,
-    BullModule.forRoot({
-      redis: {
-        host: 'localhost',
-        port: 6379,
-      },
-    }),
+    BullModule.forRootAsync({
+			inject: [ConfigService],
+			useFactory: async (configService: ConfigService) => ({
+				connection: {
+					host: configService.get('REDIS_HOST'),
+					port: configService.get('REDIS_PORT'),
+				},
+			}),
+		}),
     BullModule.registerQueue({
-      name: 'walletOptimize',
+      name: 'wallet:optimize',
+      prefix: 'telegram-bot'
     }),
   ],
   providers: [TelegramService, TransactionService, WalletService],

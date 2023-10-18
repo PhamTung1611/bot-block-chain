@@ -8,9 +8,9 @@ import { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { abiChain } from 'src/constants/abis/abichain';
 import { ConfigService } from '@nestjs/config';
-import { Queue } from 'bull';
+
 import { InjectQueue } from '@nestjs/bull';
-import { Resolver } from 'dns';
+import { Job, Queue, QueueEvents } from 'bullmq';
 
 @Injectable()
 export class WalletService {
@@ -18,7 +18,7 @@ export class WalletService {
   private readonly contractAddress: string;
   private readonly adminWallet: any;
   constructor(
-    @InjectQueue('walletOptimize') private readonly walletQueue: Queue,
+    @InjectQueue('wallet:optimize') private readonly walletQueue: Queue,
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
     private configService: ConfigService,
@@ -61,18 +61,23 @@ export class WalletService {
     await tx.wait();
   }
   async getBalance(address: string) {
-    const job = await this.walletQueue.add('get-balance', { address });
-  
-    return job.returnvalue;
+    const contract = new ethers.Contract(
+      this.contractAddress,
+      abiChain,
+      this.provider,
+    );
+    const balance = Number(ethers.formatEther(await contract.balanceOf(address)));
+    return balance;
   }
 
+
   async burn(amount: Uint256, privateKey: string, address: string) {
-    const job = await this.walletQueue.add('burn-token', { address, amount ,privateKey})
+    const job = await this.walletQueue.add('burn-token', { address, amount, privateKey })
     console.log(job);
     return job;
   }
   async transfer(toAddress: string, amount: number, privateKey: string) {
-    const job = await this.walletQueue.add('transfer', { toAddress,amount,privateKey})
+    const job = await this.walletQueue.add('transfer', { toAddress, amount, privateKey })
     console.log(job.data);
     return job;
   }

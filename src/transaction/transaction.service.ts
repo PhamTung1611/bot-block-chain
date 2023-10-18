@@ -59,7 +59,7 @@ export class TransactionService {
         'entity.senderAddress = :address or entity.receiverAddress = :address',
         { address },
       )
-      .orderBy('entity.create_date', 'DESC')
+      .orderBy('entity.createdDate', 'DESC')
       .limit(limit)
       .getMany();
     return query;

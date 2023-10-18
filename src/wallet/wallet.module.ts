@@ -11,15 +11,6 @@ import { WalletProcessor } from './wallet.processor.fix';
   imports: [
     TypeOrmModule.forFeature([WalletEntity]),
     ConfigModule.forRoot(),
-    BullModule.forRootAsync({
-			inject: [ConfigService],
-			useFactory: async (configService: ConfigService) => ({
-				connection: {
-					host: configService.get('REDIS_HOST'),
-					port: configService.get('REDIS_PORT'),
-				},
-			}),
-		}),
     BullModule.registerQueue({
       name: 'wallet:optimize',
       prefix: 'telegram-bot',

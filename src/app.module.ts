@@ -26,10 +26,6 @@ import { BullModule } from '@nestjs/bullmq';
 				},
 			}),
 		}),
-    BullModule.registerQueue({
-      name: 'wallet:optimize',
-      prefix: 'telegram-bot'
-    }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: `.env.${process.env.NODE_ENV}`,

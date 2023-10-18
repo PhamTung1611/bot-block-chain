@@ -8,6 +8,8 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 interface DataCache {
   action: string;
@@ -54,6 +56,7 @@ export class TelegramService {
   constructor(
     private transactionService: TransactionService,
     private wallerService: WalletService,
+   // @InjectQueue('botAction:optimize')private botQueue:Queue,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
     this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
@@ -118,6 +121,7 @@ export class TelegramService {
   }
 
   async handleButton(msg: any) {
+
     const options = {
       user_id: msg.update.callback_query.from.id,
       user_name: msg.update.callback_query.from.first_name,
@@ -129,6 +133,7 @@ export class TelegramService {
       money: '',
     };
     const checkUser = await this.wallerService.findOneUser(options.user_id);
+   
     switch (options.data) {
       case Button.CREATE:
         await this.handleCreateAccountButton(msg, options, data, checkUser);
@@ -288,6 +293,7 @@ export class TelegramService {
           );
           return;
         }
+
         const privateKey = await this.wallerService.checkPrivateKeyByID(
           options.idUser,
         );

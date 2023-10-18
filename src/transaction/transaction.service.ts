@@ -21,6 +21,7 @@ export class TransactionService {
     }
   }
   async updateTransactionState(status: TransactionStatus,id:string): Promise<boolean> {
+    // Em thấy dùng update thì hợp lí hơn
     const transaction = await this.findTransactionById(id);
     transaction.status = status;
     const saveTransaction =

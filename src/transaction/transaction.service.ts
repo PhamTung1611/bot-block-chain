@@ -22,10 +22,9 @@ export class TransactionService {
   }
   async updateTransactionState(status: TransactionStatus, id: string): Promise<boolean> {
     const transaction = await this.findTransactionById(id);
-    // transaction.status = status;
-    // const saveTransaction =
-    //   await this.transactionRepository.save(transaction);
-    const saveTransaction = this.transactionRepository.update(transaction.id, { status: status });
+    transaction.status = status;
+    const saveTransaction =
+      await this.transactionRepository.save(transaction);
     if (saveTransaction) {
       return true;
     } else {
@@ -60,9 +59,10 @@ export class TransactionService {
         'entity.senderAddress = :address or entity.receiverAddress = :address',
         { address },
       )
-      .orderBy('entity.createDate', 'DESC')
+      .orderBy('entity.createdDate', 'DESC')
       .limit(limit)
       .getMany();
     return query;
   }
 }
+

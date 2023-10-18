@@ -557,6 +557,9 @@ export class TelegramService {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.user_id);
       this.setCache(options, Action.HISTORY, 1);
+      await msg.reply(
+        `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
+      );
     }
   }
   async handleInformationButton(msg: any, options: any, data: any, checkUser: any) {
@@ -600,6 +603,7 @@ export class TelegramService {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.user_id);
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
+      await msg.reply('Điền địa chỉ người nhận');
     }
   }
   async handleTransferButton(msg: any, checkUser: any) {

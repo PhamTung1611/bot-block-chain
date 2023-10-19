@@ -1,5 +1,9 @@
-import { Entity, Column, PrimaryGeneratedColumn, BeforeInsert, CreateDateColumn } from 'typeorm';
-import { v4 as uuid } from 'uuid';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+} from 'typeorm';
 @Entity()
 export class WalletEntity {
   @PrimaryGeneratedColumn('uuid')
@@ -22,5 +26,4 @@ export class WalletEntity {
 
   @CreateDateColumn()
   createdDate: Date;
-
 }

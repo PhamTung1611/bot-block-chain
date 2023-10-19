@@ -4,20 +4,18 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CacheModule } from '@nestjs/cache-manager';
 import { TransactionEntity } from 'src/transaction/transaction.entity';
-import { TransactionService } from 'src/transaction/transaction.service';
-import { WalletService } from 'src/wallet/wallet.service';
 import { WalletEntity } from 'src/wallet/wallet.entity';
 import { TransactionModule } from 'src/transaction/transaction.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TransactionEntity,WalletEntity]),
+    TypeOrmModule.forFeature([TransactionEntity, WalletEntity]),
     CacheModule.register(),
     TransactionModule,
-    WalletModule
+    WalletModule,
   ],
   providers: [TelegramService],
-  exports:[TelegramService]
+  exports: [TelegramService],
 })
 export class TelegramModule {}

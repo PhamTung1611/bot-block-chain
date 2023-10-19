@@ -17,13 +17,14 @@ export class WalletService {
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
-    private configService: ConfigService
+    private configService: ConfigService,
   ) {
-    this.provider = new ethers.JsonRpcProvider(
-      configService.get('RPC')
+    this.provider = new ethers.JsonRpcProvider(configService.get('RPC'));
+    this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09';
+    this.adminWallet = new Wallet(
+      configService.get('adminPrivateKey'),
+      this.provider,
     );
-    this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09'
-    this.adminWallet = new Wallet(configService.get('adminPrivateKey'), this.provider);
   }
 
   async createWallet(jsonData: any, address: string) {
@@ -46,12 +47,12 @@ export class WalletService {
   }
 
   async mint(address: string, amount: Uint256) {
-    const sourceWallet = new Wallet(this.configService.get('adminPrivateKey'), this.provider);
+    const sourceWallet = new Wallet(
+      this.configService.get('adminPrivateKey'),
+      this.provider,
+    );
     const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
-    const txResponse = await contract.mint(
-      address,
-      amount,
-    )
+    const txResponse = await contract.mint(address, amount);
     if (txResponse) {
       return true;
     } else {
@@ -75,7 +76,7 @@ export class WalletService {
     return Number(ethers.formatEther(balance));
   }
 
-  async burn(amount: Uint256, privateKey: string, address: string) {
+  async burn(amount: Uint256, privateKey: string) {
     try {
       const sourceWallet = new Wallet(privateKey, this.provider);
       const contract = new Contract(

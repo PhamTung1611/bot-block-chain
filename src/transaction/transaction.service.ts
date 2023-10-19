@@ -9,7 +9,7 @@ export class TransactionService {
   constructor(
     @InjectRepository(TransactionEntity)
     private readonly transactionRepository: Repository<TransactionEntity>,
-  ) { }
+  ) {}
 
   async createTransaction(jsonData: any) {
     const transaction = this.transactionRepository.create(jsonData);
@@ -20,20 +20,24 @@ export class TransactionService {
       return undefined;
     }
   }
-  async updateTransactionState(status: TransactionStatus, id: string): Promise<boolean> {
+  async updateTransactionState(
+    status: TransactionStatus,
+    id: string,
+  ): Promise<boolean> {
     const transaction = await this.findTransactionById(id);
     transaction.status = status;
-    const saveTransaction =
-      await this.transactionRepository.save(transaction);
+    const saveTransaction = await this.transactionRepository.save(transaction);
     if (saveTransaction) {
       return true;
     } else {
       return false;
     }
   }
-  async findTransactionById(id: string): Promise<TransactionEntity | undefined> {
+  async findTransactionById(
+    id: string,
+  ): Promise<TransactionEntity | undefined> {
     const transaction = await this.transactionRepository.findOneBy({
-      id: id
+      id: id,
     });
 
     return transaction;
@@ -65,4 +69,3 @@ export class TransactionService {
     return query;
   }
 }
-

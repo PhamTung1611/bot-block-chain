@@ -585,7 +585,7 @@ export class TelegramService {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    if(data.action !==''){
+    if (data.action !== '') {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.user_id);
       this.setCache(options, Action.TRANSACTION, 1);

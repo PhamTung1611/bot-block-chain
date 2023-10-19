@@ -23,8 +23,4 @@ export class WalletEntity {
   @CreateDateColumn()
   createdDate: Date;
 
-  @BeforeInsert()
-  generateUUID() {
-    this.id = uuid();
-  }
 }

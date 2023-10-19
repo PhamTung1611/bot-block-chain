@@ -12,7 +12,7 @@ import { DatabaseConfig } from './config/typeorm.config';
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({useClass:DatabaseConfig}),
-    ConfigModule,
+    ConfigModule.forRoot(),
     TelegramModule,
     TransactionModule,
     WalletModule,

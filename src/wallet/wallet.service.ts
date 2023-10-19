@@ -27,11 +27,7 @@ export class WalletService {
   }
 
   async createWallet(jsonData: any, address: string) {
-<<<<<<< HEAD
     await this.sendToken(address);
-=======
-   await this.sendToken(address);
->>>>>>> e27d7faf95a2178080a0bb3521e4e6f77364a18e
     const wallet = this.walletRepository.create(jsonData);
     const createWallet = await this.walletRepository.save(wallet);
     if (createWallet) {

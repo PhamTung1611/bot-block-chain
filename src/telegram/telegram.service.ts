@@ -290,7 +290,7 @@ export class TelegramService {
         const balance = await this.wallerService.getBalance(address);
         if (Number(balance) < Number(data.money)) {
           await this.cacheManager.del(options.idUser);
-          await msg.reply(`Rút tiền thất bại`);
+          await msg.reply(`Tài khoản không đủ tiền`);
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL, transaction.id
           );

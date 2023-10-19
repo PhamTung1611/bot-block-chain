@@ -12,13 +12,11 @@ import { DatabaseConfig } from './config/typeorm.config';
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({useClass:DatabaseConfig}),
-    ConfigModule.forRoot(),
     TelegramModule,
     TransactionModule,
     WalletModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: `.env.${process.env.NODE_ENV}`,
     }),
   ],
   controllers: [AppController],

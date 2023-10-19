@@ -8,9 +8,9 @@ import { ConfigModule } from '@nestjs/config';
 @Module({
   imports: [
     TypeOrmModule.forFeature([WalletEntity]),
-    ConfigModule.forRoot(),
   ],
   providers: [WalletService],
-  exports: [ConfigModule],
+  exports:[WalletService],
+
 })
 export class WalletModule {}

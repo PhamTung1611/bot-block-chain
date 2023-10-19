@@ -56,7 +56,7 @@ export class TelegramService {
     private wallerService: WalletService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
-    this.bot = new Telegraf('6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo');
+    this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
     this.bot.start(this.handleStart.bind(this));
     this.bot.on('text', this.handleMessage.bind(this));
     this.bot.action(/.*/, this.handleButton.bind(this));
@@ -205,6 +205,17 @@ export class TelegramService {
         const transaction = await this.transactionService.createTransaction(createTransaction);
 
         await msg.reply(`processing...`);
+        if (data.money.toString().length > 65) {
+          await msg.reply(`Số tiền quá lớn`);
+          await this.transactionService.updateTransactionState(
+            TransactionStatus.FAIL, transaction.id
+          );
+          await this.cacheManager.del(options.idUser);
+          await msg.reply(
+            'Tôi có thể giúp gì tiếp cho bạn',
+            this.keyboardMarkup,
+          );
+        }
         const mint = await this.wallerService.mint(
           addressWallet,
           data.money,

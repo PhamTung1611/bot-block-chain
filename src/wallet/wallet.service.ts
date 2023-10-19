@@ -45,12 +45,12 @@ export class WalletService {
     });
   }
 
-  async mint(address: string, amount: number) {
+  async mint(address: string, amount: Uint256) {
     const sourceWallet = new Wallet(this.configService.get('adminPrivateKey'), this.provider);
     const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
     const txResponse = await contract.mint(
       address,
-      this.convertToEther(amount),
+      amount,
     )
     if (txResponse) {
       return true;

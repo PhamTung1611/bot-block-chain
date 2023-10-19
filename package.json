@@ -34,6 +34,7 @@
     "@types/bull": "^4.10.0",
     "@types/cache-manager": "^4.0.3",
     "bcrypt": "^5.1.1",
+    "bignumber.js": "^9.1.2",
     "bull-board": "^2.1.3",
     "bullmq": "^4.12.4",
     "cache-manager": "^5.2.3",

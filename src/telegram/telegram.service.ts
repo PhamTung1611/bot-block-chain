@@ -8,7 +8,7 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-
+import { ethers } from 'ethers';
 interface DataCache {
   action: string;
   step: number;
@@ -207,7 +207,7 @@ export class TelegramService {
         await msg.reply(`processing...`);
         const mint = await this.wallerService.mint(
           addressWallet,
-          Number(data.money),
+          data.money,
         );
         await this.transactionService.updateTransactionState(
           TransactionStatus.PENDING, transaction.id

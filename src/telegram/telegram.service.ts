@@ -212,9 +212,10 @@ export class TelegramService {
           );
           await this.cacheManager.del(options.idUser);
           await msg.reply(
-            'Tôi có thể giúp gì tiếp cho bạn',
+            'Tôi có thể giúp gì cho bạn',
             this.keyboardMarkup,
           );
+          return;
         }
         const mint = await this.wallerService.mint(
           addressWallet,

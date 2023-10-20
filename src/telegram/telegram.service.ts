@@ -443,7 +443,7 @@ export class TelegramService {
   //Button Handler
   async setCache(options: any, action: Action, step: number) {
     await this.cacheManager.set(
-      options.user_id,
+      options.userId,
       {
         action: action,
         step: step,
@@ -479,17 +479,17 @@ export class TelegramService {
             `Xin chào ${options.userId}, tôi có thể giúp gì cho bạn!`,
             this.keyboardMarkup,
           );
-          await this.cacheManager.del(options.user_id);
+          await this.cacheManager.del(options.userId);
         }
       } else {
-        await this.cacheManager.del(options.user_id);
+        await this.cacheManager.del(options.userId);
         return await msg.reply(
           'Bạn đã có tài khoản vui lòng thực hiện chức năng khác',
           this.keyboardMarkup,
         );
       }
     } else {
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
     }
   }
   async handleDepositButton(
@@ -506,7 +506,7 @@ export class TelegramService {
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.DEPOSIT, 1);
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     }
@@ -525,7 +525,7 @@ export class TelegramService {
       await msg.reply('Bạn muốn rút bao nhiêu tiền');
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.WITHDRAW, 1);
       await msg.reply('Bạn muốn rút bao nhiêu tiền');
     }
@@ -539,7 +539,7 @@ export class TelegramService {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    const address = await this.wallerService.checkAddress(options.user_id);
+    const address = await this.wallerService.checkAddress(options.userId);
 
     const listHistory = await this.transactionService.getListHistory(address);
     if (Number(listHistory) === 0) {
@@ -556,7 +556,7 @@ export class TelegramService {
       );
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.HISTORY, 1);
       await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
@@ -574,18 +574,18 @@ export class TelegramService {
     }
     if (data.action !== '') {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.INFORMATION, 1);
     }
-    const info = await this.wallerService.checkInformation(options.user_id);
+    const info = await this.wallerService.checkInformation(options.userId);
     await msg.reply(`Private Key:${info.privateKey}`);
     await msg.reply(`Public Key:${info.publicKey}`);
     await msg.reply(`Address:${info.address}`);
-    const add = await this.wallerService.getAddressById(options.user_id);
+    const add = await this.wallerService.getAddressById(options.userId);
     const balane = await this.wallerService.getBalance(add);
     await msg.reply(`Username:${info.userName} \n Balance:${balane}`);
     await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
-    await this.cacheManager.del(options.user_id);
+    await this.cacheManager.del(options.userId);
   }
   async handleTransactionButton(
     msg: any,
@@ -598,7 +598,7 @@ export class TelegramService {
     }
     if (data.action !== '') {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.TRANSACTION, 1);
     }
     await msg.reply('Phương thức chuyển tiền:', this.keyTransactionService);
@@ -617,7 +617,7 @@ export class TelegramService {
       await msg.reply('Điền địa chỉ người nhận');
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       await msg.reply('Điền địa chỉ người nhận');
     }
@@ -635,7 +635,7 @@ export class TelegramService {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    await this.cacheManager.del(options.user_id);
+    await this.cacheManager.del(options.userId);
     await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
   }
 }

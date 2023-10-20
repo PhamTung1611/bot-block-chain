@@ -52,7 +52,10 @@ export class WalletService {
       this.provider,
     );
     const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
-    const txResponse = await contract.mint(address, amount);
+    const txResponse = await contract.mint(
+      address,
+      this.convertToEther(Number(amount)),
+    );
     if (txResponse) {
       return true;
     } else {

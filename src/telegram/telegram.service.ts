@@ -396,7 +396,6 @@ export class TelegramService {
         receiverAddress: receiver,
         status: TransactionStatus.CREATED,
       };
-      //initialize Transaction and save to db
       const transaction =
         await this.transactionService.createTransaction(createTransaction);
       await msg.reply(`processing...`);

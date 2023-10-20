@@ -10,10 +10,10 @@ export class WalletEntity {
   id: string;
 
   @Column('text')
-  id_user: string;
+  userId: string;
 
   @Column('text')
-  user_name: string;
+  userName: string;
 
   @Column('text')
   address: string;

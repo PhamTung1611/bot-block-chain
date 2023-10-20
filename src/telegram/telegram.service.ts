@@ -118,16 +118,16 @@ export class TelegramService {
 
   async handleButton(msg: any) {
     const options = {
-      user_id: msg.update.callback_query.from.id,
-      user_name: msg.update.callback_query.from.first_name,
+      userId: msg.update.callback_query.from.id,
+      userName: msg.update.callback_query.from.first_name,
       data: msg.update.callback_query.data,
     };
-    const data: DataCache = (await this.cacheManager.get(options.user_id)) || {
+    const data: DataCache = (await this.cacheManager.get(options.userId)) || {
       action: '',
       step: 1,
       money: '',
     };
-    const checkUser = await this.wallerService.findOneUser(options.user_id);
+    const checkUser = await this.wallerService.findOneUser(options.userId);
     switch (options.data) {
       case Button.CREATE:
         await this.handleCreateAccountButton(msg, options, data, checkUser);
@@ -157,7 +157,7 @@ export class TelegramService {
         await this.handleCancelButton(msg, options, checkUser);
         break;
       default:
-        await this.cacheManager.del(options.user_id);
+        await this.cacheManager.del(options.userId);
         await msg.reply(`Xin lỗi tôi không hiểu`);
         await msg.reply(
           'Tôi chỉ thực hiện được như bên dưới thôi!',
@@ -461,10 +461,10 @@ export class TelegramService {
       if (!checkUser) {
         const wallet = await this.wallerService.generateNewWallet();
         const user = {
-          id_user: msg.chat.id,
-          user_name: msg.chat.first_name,
+          userId: msg.chat.id,
+          userName: msg.chat.first_name,
         };
-        await msg.reply(`Tạo tài khoản cho user ${user.id_user}`);
+        await msg.reply(`Tạo tài khoản cho user ${user.userId}`);
         const data = await this.wallerService.createWallet(
           {
             ...wallet,
@@ -476,7 +476,7 @@ export class TelegramService {
         if (data) {
           await msg.reply(`Tạo tài khoản thành công`);
           await msg.reply(
-            `Xin chào ${options.user_name}, tôi có thể giúp gì cho bạn!`,
+            `Xin chào ${options.userId}, tôi có thể giúp gì cho bạn!`,
             this.keyboardMarkup,
           );
           await this.cacheManager.del(options.user_id);
@@ -583,7 +583,7 @@ export class TelegramService {
     await msg.reply(`Address:${info.address}`);
     const add = await this.wallerService.getAddressById(options.user_id);
     const balane = await this.wallerService.getBalance(add);
-    await msg.reply(`Username:${info.user_name} \n Balance:${balane}`);
+    await msg.reply(`Username:${info.userName} \n Balance:${balane}`);
     await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
     await this.cacheManager.del(options.user_id);
   }

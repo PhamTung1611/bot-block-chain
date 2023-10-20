@@ -125,9 +125,9 @@ export class WalletService {
   convertToEther(amount: number) {
     return ethers.parseUnits(amount.toString(), 'ether');
   }
-  async findOneUser(id_user: string) {
+  async findOneUser(userId: string) {
     const User = await this.walletRepository.findOne({
-      where: { id_user: id_user },
+      where: { userId: userId },
     });
     if (User) {
       return true;
@@ -148,13 +148,13 @@ export class WalletService {
     console.log(a);
   }
   async sendMoneybyAddress(
-    id_user: string,
+    userId: string,
     receiverAddress: string,
     money: number,
   ) {
     const sender = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     const receiver = await this.walletRepository.findOne({
@@ -162,7 +162,7 @@ export class WalletService {
         address: receiverAddress,
       },
     });
-    if (sender.user_name === receiver.user_name) {
+    if (sender.userId === receiver.userId) {
       return WalletStatus.SELF;
     }
     if (!sender || !receiver) {
@@ -172,7 +172,7 @@ export class WalletService {
     if (balance < money) {
       return WalletStatus.NOT_ENOUGH_FUND;
     }
-    const privateKey = await this.checkPrivateKeyByID(id_user);
+    const privateKey = await this.checkPrivateKeyByID(userId);
     const checkTransaction = await this.transfer(
       receiver.address,
       Number(money),
@@ -184,10 +184,10 @@ export class WalletService {
     }
     return TransactionStatus.SUCCESS;
   }
-  async withdrawn(id_user: string, money: number) {
+  async withdrawn(userId: string, money: number) {
     const user = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     const balance = await this.getBalance(user.address);
@@ -201,10 +201,10 @@ export class WalletService {
     return WalletStatus.SUCCESS;
   }
 
-  async checkAddress(id_user: string) {
+  async checkAddress(userId: string) {
     const checkUser = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
 
@@ -229,10 +229,10 @@ export class WalletService {
     }
     return WalletStatus.FOUND;
   }
-  async getAddressById(id_user: string) {
+  async getAddressById(userId: string) {
     const checkUser = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     if (!checkUser) {
@@ -251,18 +251,18 @@ export class WalletService {
     }
     return checkUser.address;
   }
-  async checkInformation(id: string) {
+  async checkInformation(userId: string) {
     const user = await this.walletRepository.findOne({
       where: {
-        id_user: id,
+        userId: userId,
       },
     });
     return user;
   }
-  async checkPrivateKeyByID(id_user: string) {
+  async checkPrivateKeyByID(userId: string) {
     const checkUser = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     if (!checkUser) {

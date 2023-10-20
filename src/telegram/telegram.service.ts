@@ -119,7 +119,7 @@ export class TelegramService {
   async handleButton(msg: any) {
     const options = {
       userId: msg.update.callback_query.from.id,
-      userName: msg.update.callback_query.from.first_name,
+      username: msg.update.callback_query.from.first_name,
       data: msg.update.callback_query.data,
     };
     const data: DataCache = (await this.cacheManager.get(options.userId)) || {
@@ -462,7 +462,7 @@ export class TelegramService {
         const wallet = await this.wallerService.generateNewWallet();
         const user = {
           userId: msg.chat.id,
-          userName: msg.chat.first_name,
+          username: msg.chat.first_name,
         };
         await msg.reply(`Tạo tài khoản cho user ${user.userId}`);
         const data = await this.wallerService.createWallet(
@@ -583,7 +583,7 @@ export class TelegramService {
     await msg.reply(`Address:${info.address}`);
     const add = await this.wallerService.getAddressById(options.userId);
     const balane = await this.wallerService.getBalance(add);
-    await msg.reply(`Username:${info.userName} \n Balance:${balane}`);
+    await msg.reply(`username:${info.username} \n Balance:${balane}`);
     await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
     await this.cacheManager.del(options.userId);
   }

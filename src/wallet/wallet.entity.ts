@@ -13,7 +13,7 @@ export class WalletEntity {
   userId: string;
 
   @Column('text')
-  userName: string;
+  username: string;
 
   @Column('text')
   address: string;

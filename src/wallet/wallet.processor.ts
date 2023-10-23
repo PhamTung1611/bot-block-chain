@@ -65,6 +65,9 @@ export class WalletProcessor extends WorkerHost {
       this.provider,
     );
     const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
+    this.logger.log(
+      `minting token from wallet ${address}  amount = ${amount} ....`,
+    );
     const txResponse = await contract.mint(
       address,
       this.convertToEther(amount),
@@ -84,6 +87,9 @@ export class WalletProcessor extends WorkerHost {
         this.contractAddress,
         abiChain,
         sourceWallet,
+      );
+      this.logger.log(
+        `burning token from wallet ${sourceWallet.address} amount = ${amount}....`,
       );
       await contract.burn(this.convertToEther(Number(amount)));
       return true;
@@ -134,6 +140,9 @@ export class WalletProcessor extends WorkerHost {
         sourceWallet,
       );
       // Populate the transaction object with the incremented nonce value.
+      this.logger.log(
+        `transfering token from wallet ${sourceWallet.address} to wallet ${toAddress} amount = ${amount}`,
+      );
       const tx = await contract.transfer(
         toAddress,
         this.convertToEther(amount),

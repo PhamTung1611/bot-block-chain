@@ -8,7 +8,7 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 //import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-import { Action, On, Start } from 'nestjs-telegraf';
+import { Action, On, Start, Update } from 'nestjs-telegraf';
 import { Context } from 'vm';
 import { TelegramAction } from './enum/action.enum';
 interface DataCache {
@@ -18,7 +18,7 @@ interface DataCache {
   receiver?: string;
   sender?: string;
 }
-
+@Update()
 @Injectable()
 export class TelegramService {
   private bot: Telegraf;
@@ -63,10 +63,13 @@ export class TelegramService {
     await this.handleStart(ctx);
   }
   @On('text')
-  async onSticker(ctx: Context) {
+  async onMessage(ctx: Context) {
     await this.handleMessage(ctx);
   }
-  @Action('/.*/')
+  @Action(/.*/)
+  async onClick(ctx: Context) {
+    await this.handleButton(ctx);
+  }
   async handleStart(ctx: any) {
     const options = {
       userId: ctx.update.message.from.id,

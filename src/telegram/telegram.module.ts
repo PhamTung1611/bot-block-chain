@@ -4,22 +4,22 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CacheModule } from '@nestjs/cache-manager';
 import { TransactionEntity } from 'src/transaction/transaction.entity';
-import { TransactionService } from 'src/transaction/transaction.service';
-import { WalletService } from 'src/wallet/wallet.service';
 import { WalletEntity } from 'src/wallet/wallet.entity';
-
+import { TransactionModule } from 'src/transaction/transaction.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { BullModule } from '@nestjs/bullmq';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TransactionEntity,WalletEntity]),
+    TypeOrmModule.forFeature([TransactionEntity, WalletEntity]),
     CacheModule.register(),
+    TransactionModule,
     WalletModule,
     BullModule.registerQueue({
       name: 'wallet:optimize',
-      prefix: 'telegram-bot'
+      prefix: 'telegram-bot',
     }),
   ],
-  providers: [TelegramService, TransactionService, WalletService],
+  providers: [TelegramService],
+  exports: [TelegramService],
 })
 export class TelegramModule {}

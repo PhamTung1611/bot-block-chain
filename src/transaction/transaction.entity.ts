@@ -1,4 +1,9 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+} from 'typeorm';
 import { TransactionStatus } from './enum/transaction.enum';
 
 @Entity()

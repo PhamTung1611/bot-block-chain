@@ -23,15 +23,16 @@ export class WalletService {
     private readonly walletRepository: Repository<WalletEntity>,
     private configService: ConfigService,
   ) {
-    this.provider = new ethers.JsonRpcProvider(
-      configService.get('RPC')
+    this.provider = new ethers.JsonRpcProvider(configService.get('RPC'));
+    this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09';
+    this.adminWallet = new Wallet(
+      configService.get('adminPrivateKey'),
+      this.provider,
     );
-    this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09'
-    this.adminWallet = new Wallet(configService.get('adminPrivateKey'), this.provider);
   }
 
   async createWallet(jsonData: any, address: string) {
-    this.sendToken(address);
+    await this.sendToken(address);
     const wallet = this.walletRepository.create(jsonData);
     const createWallet = await this.walletRepository.save(wallet);
     if (createWallet) {
@@ -48,10 +49,22 @@ export class WalletService {
       value: ethers.parseUnits('0.01', 'ether'),
     });
   }
-  async mint(address: string, amount: number) {
-    const job = await this.walletQueue.add('mint-token', { address, amount })
-    console.log(job);
-    return job;
+
+  async mint(address: string, amount: Uint256) {
+    const sourceWallet = new Wallet(
+      this.configService.get('adminPrivateKey'),
+      this.provider,
+    );
+    const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
+    const txResponse = await contract.mint(
+      address,
+      this.convertToEther(Number(amount)),
+    );
+    if (txResponse) {
+      return true;
+    } else {
+      return false;
+    }
   }
 
   async addAuthorizedOwner(newOwner: string) {
@@ -66,18 +79,34 @@ export class WalletService {
       abiChain,
       this.provider,
     );
-    const balance = Number(ethers.formatEther(await contract.balanceOf(address)));
+    const balance = Number(
+      ethers.formatEther(await contract.balanceOf(address)),
+    );
     return balance;
   }
 
-
-  async burn(amount: Uint256, privateKey: string, address: string) {
-    const job = await this.walletQueue.add('burn-token', { address, amount, privateKey })
-    console.log(job);
-    return job;
+  async burn(amount: Uint256, privateKey: string) {
+    try {
+      const sourceWallet = new Wallet(privateKey, this.provider);
+      const contract = new Contract(
+        this.contractAddress,
+        abiChain,
+        sourceWallet,
+      );
+      const tx = await contract.burn(this.convertToEther(Number(amount)));
+      await tx.wait();
+      return true;
+    } catch (error) {
+      console.log(error);
+      return false;
+    }
   }
   async transfer(toAddress: string, amount: number, privateKey: string) {
-    const job = await this.walletQueue.add('transfer', { toAddress, amount, privateKey })
+    const job = await this.walletQueue.add('transfer', {
+      toAddress,
+      amount,
+      privateKey,
+    });
     console.log(job.data);
     return job;
   }
@@ -94,9 +123,9 @@ export class WalletService {
   convertToEther(amount: number) {
     return ethers.parseUnits(amount.toString(), 'ether');
   }
-  async findOneUser(id_user: string) {
+  async findOneUser(userId: string) {
     const User = await this.walletRepository.findOne({
-      where: { id_user: id_user },
+      where: { userId: userId },
     });
     if (User) {
       return true;
@@ -117,13 +146,13 @@ export class WalletService {
     console.log(a);
   }
   async sendMoneybyAddress(
-    id_user: string,
+    userId: string,
     receiverAddress: string,
     money: number,
   ) {
     const sender = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     const receiver = await this.walletRepository.findOne({
@@ -131,18 +160,18 @@ export class WalletService {
         address: receiverAddress,
       },
     });
-    if (sender.user_name === receiver.user_name) {
+    if (sender.userId === receiver.userId) {
       return WalletStatus.SELF;
     }
     if (!sender || !receiver) {
       return WalletStatus.NOT_FOUND;
     }
     const balance = await this.getBalance(sender.address);
-    console.log(balance)
+    console.log(balance);
     if (balance < money) {
       return WalletStatus.NOT_ENOUGH_FUND;
     }
-    const privateKey = await this.checkPrivateKeyByID(id_user);
+    const privateKey = await this.checkPrivateKeyByID(userId);
     const checkTransaction = await this.transfer(
       receiver.address,
       Number(money),
@@ -154,10 +183,10 @@ export class WalletService {
     }
     return TransactionStatus.SUCCESS;
   }
-  async withdrawn(id_user: string, money: number) {
+  async withdrawn(userId: string, money: number) {
     const user = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     const balance = await this.getBalance(user.address);
@@ -171,10 +200,10 @@ export class WalletService {
     return WalletStatus.SUCCESS;
   }
 
-  async checkAddress(id_user: string) {
+  async checkAddress(userId: string) {
     const checkUser = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
 
@@ -199,10 +228,10 @@ export class WalletService {
     }
     return WalletStatus.FOUND;
   }
-  async getAddressById(id_user: string) {
+  async getAddressById(userId: string) {
     const checkUser = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     if (!checkUser) {
@@ -221,18 +250,18 @@ export class WalletService {
     }
     return checkUser.address;
   }
-  async checkInformation(id: string) {
+  async checkInformation(userId: string) {
     const user = await this.walletRepository.findOne({
       where: {
-        id_user: id,
+        userId: userId,
       },
     });
     return user;
   }
-  async checkPrivateKeyByID(id_user: string) {
+  async checkPrivateKeyByID(userId: string) {
     const checkUser = await this.walletRepository.findOne({
       where: {
-        id_user: id_user,
+        userId: userId,
       },
     });
     if (!checkUser) {

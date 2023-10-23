@@ -8,7 +8,6 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-
 interface DataCache {
   action: string;
   step: number;
@@ -65,10 +64,10 @@ export class TelegramService {
 
   async handleStart(ctx: any) {
     const options = {
-      id: ctx.update.message.from.id,
+      userId: ctx.update.message.from.id,
       username: ctx.update.message.from.first_name,
     };
-    const checkUser = await this.wallerService.findOneUser(options.id);
+    const checkUser = await this.wallerService.findOneUser(options.userId);
 
     if (!checkUser) {
       await ctx.reply(
@@ -84,11 +83,11 @@ export class TelegramService {
   }
   async handleMessage(msg: any) {
     const options = {
-      idUser: msg.update.message.from.id,
+      userId: msg.update.message.from.id,
       username: msg.update.message.from.first_name,
       text: msg.update.message.text,
     };
-    const data: DataCache = await this.cacheManager.get(options.idUser);
+    const data: DataCache = await this.cacheManager.get(options.userId);
     if (!data) {
       return await msg.reply(
         'Xin lỗi, tôi không hiểu. Vui lòng thử lại',
@@ -106,7 +105,7 @@ export class TelegramService {
         await this.handleHistoryAction(msg, options, data);
         break;
       case Action.TRANSFER_BY_ADDRESS:
-        await this.handleTransferByAddressAction(msg, options, data)
+        await this.handleTransferByAddressAction(msg, options, data);
         break;
       case Action.SEND_MONEY_ADDRESS:
         await this.handleSendMoneyAction(msg, options, data);
@@ -119,16 +118,16 @@ export class TelegramService {
 
   async handleButton(msg: any) {
     const options = {
-      user_id: msg.update.callback_query.from.id,
-      user_name: msg.update.callback_query.from.first_name,
+      userId: msg.update.callback_query.from.id,
+      username: msg.update.callback_query.from.first_name,
       data: msg.update.callback_query.data,
     };
-    const data: DataCache = (await this.cacheManager.get(options.user_id)) || {
+    const data: DataCache = (await this.cacheManager.get(options.userId)) || {
       action: '',
       step: 1,
       money: '',
     };
-    const checkUser = await this.wallerService.findOneUser(options.user_id);
+    const checkUser = await this.wallerService.findOneUser(options.userId);
     switch (options.data) {
       case Button.CREATE:
         await this.handleCreateAccountButton(msg, options, data, checkUser);
@@ -158,14 +157,13 @@ export class TelegramService {
         await this.handleCancelButton(msg, options, checkUser);
         break;
       default:
-        await this.cacheManager.del(options.user_id);
+        await this.cacheManager.del(options.userId);
         await msg.reply(`Xin lỗi tôi không hiểu`);
         await msg.reply(
           'Tôi chỉ thực hiện được như bên dưới thôi!',
           this.keyboardMarkup,
         );
         break;
-
     }
   }
   //Action Handler
@@ -173,28 +171,23 @@ export class TelegramService {
     if (data.step === 1) {
       const Money = options.text;
       if (!Number(Money)) {
-        await this.cacheManager.del(options.idUser);
-        return await msg.reply(
-          'Vui lòng thực hiện lại',
-          this.keyboardMarkup,
-        );
+        await this.cacheManager.del(options.userId);
+        return await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
       }
       if (Number(Money) && Number(Money) > 0) {
         data.money = options.text;
         data.step = 2;
-        await this.cacheManager.set(options.idUser, data, 30000);
+        await this.cacheManager.set(options.userId, data, 30000);
       } else {
-        await this.cacheManager.del(options.idUser);
+        await this.cacheManager.del(options.userId);
         await msg.reply(`Vui lòng thực hiện lại`, this.keyboardMarkup);
       }
       if (data.step === 2) {
-        await this.cacheManager.set(options.idUser, data, 30000);
+        await this.cacheManager.set(options.userId, data, 30000);
         const addressWallet = await this.wallerService.getAddressById(
-          options.idUser,
+          options.userId,
         );
-        const address = await this.wallerService.checkAddress(
-          options.idUser,
-        );
+        const address = await this.wallerService.checkAddress(options.userId);
         const createTransaction = {
           balance: String(data.money),
           type: String(data.action),
@@ -202,22 +195,31 @@ export class TelegramService {
           receiverAddress: address,
           status: TransactionStatus.CREATED,
         };
-        const transaction = await this.transactionService.createTransaction(createTransaction);
-
+        const transaction =
+          await this.transactionService.createTransaction(createTransaction);
         await msg.reply(`processing...`);
-        const mint = await this.wallerService.mint(
-          addressWallet,
-          Number(data.money),
-        );
+        if (data.money.toString().length > 65) {
+          await msg.reply(`Số tiền quá lớn`);
+          await this.transactionService.updateTransactionState(
+            TransactionStatus.FAIL,
+            transaction.id,
+          );
+          await this.cacheManager.del(options.userId);
+          await msg.reply('Tôi có thể giúp gì cho bạn', this.keyboardMarkup);
+          return;
+        }
+        const mint = await this.wallerService.mint(addressWallet, data.money);
         await this.transactionService.updateTransactionState(
-          TransactionStatus.PENDING, transaction.id
+          TransactionStatus.PENDING,
+          transaction.id,
         );
 
         if (!mint) {
           await this.transactionService.updateTransactionState(
-            TransactionStatus.FAIL, transaction.id
+            TransactionStatus.FAIL,
+            transaction.id,
           );
-          await this.cacheManager.del(options.idUser);
+          await this.cacheManager.del(options.userId);
           await msg.reply(`Nạp tiền thất bại`);
           await msg.reply(
             'Tôi có thể giúp gì tiếp cho bạn',
@@ -226,9 +228,10 @@ export class TelegramService {
           return;
         } else {
           await this.transactionService.updateTransactionState(
-            TransactionStatus.SUCCESS, transaction.id
+            TransactionStatus.SUCCESS,
+            transaction.id,
           );
-          await this.cacheManager.del(options.idUser);
+          await this.cacheManager.del(options.userId);
           await msg.reply(`Nạp tiền thành công`);
           await msg.reply(
             'Tôi có thể giúp gì tiếp cho bạn',
@@ -243,30 +246,22 @@ export class TelegramService {
     if (data.step === 1) {
       const Money = options.text;
       if (!Number(Money)) {
-        await this.cacheManager.del(options.idUser);
-        return await msg.reply(
-          'Vui lòng thực hiện lại',
-          this.keyboardMarkup,
-        );
+        await this.cacheManager.del(options.userId);
+        return await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
       }
       if (Number(Money) && Number(Money) > 0) {
         data.money = options.text;
         data.step = 2;
-        await this.cacheManager.set(options.idUser, data, 30000);
+        await this.cacheManager.set(options.userId, data, 30000);
       } else {
         await msg.reply(`Rút tiền thất bại, vui lòng thử lại`);
-        await this.cacheManager.del(options.idUser);
-        await msg.reply(
-          'Tôi có thể giúp gì tiếp cho bạn',
-          this.keyboardMarkup,
-        );
+        await this.cacheManager.del(options.userId);
+        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
       }
       if (data.step === 2) {
-        await this.cacheManager.set(options.idUser, data, 30000);
+        await this.cacheManager.set(options.userId, data, 30000);
 
-        const address = await this.wallerService.checkAddress(
-          options.idUser,
-        );
+        const address = await this.wallerService.checkAddress(options.userId);
         const createTransaction = {
           balance: String(data.money),
           type: String(data.action),
@@ -274,13 +269,15 @@ export class TelegramService {
           receiverAddress: address,
           status: TransactionStatus.CREATED,
         };
-        const transaction = await this.transactionService.createTransaction(createTransaction);
+        const transaction =
+          await this.transactionService.createTransaction(createTransaction);
         const balance = await this.wallerService.getBalance(address);
         if (Number(balance) < Number(data.money)) {
-          await this.cacheManager.del(options.idUser);
-          await msg.reply(`Rút tiền thất bại`);
+          await this.cacheManager.del(options.userId);
+          await msg.reply(`Tài khoản không đủ tiền`);
           await this.transactionService.updateTransactionState(
-            TransactionStatus.FAIL, transaction.id
+            TransactionStatus.FAIL,
+            transaction.id,
           );
           await msg.reply(
             'Tôi có thể giúp gì tiếp cho bạn',
@@ -289,21 +286,19 @@ export class TelegramService {
           return;
         }
         const privateKey = await this.wallerService.checkPrivateKeyByID(
-          options.idUser,
+          options.userId,
         );
         await this.transactionService.updateTransactionState(
-          TransactionStatus.PENDING, transaction.id
+          TransactionStatus.PENDING,
+          transaction.id,
         );
         await msg.reply(`processing....`);
 
-        const burn = await this.wallerService.burn(
-          data.money,
-          privateKey,
-          address,
-        );
+        const burn = await this.wallerService.burn(data.money, privateKey);
         if (!burn) {
           await this.transactionService.updateTransactionState(
-            TransactionStatus.FAIL, transaction.id
+            TransactionStatus.FAIL,
+            transaction.id,
           );
           await msg.reply(`Rút tiền thất bại`);
           await msg.reply(
@@ -313,53 +308,43 @@ export class TelegramService {
           return;
         }
         await this.transactionService.updateTransactionState(
-          TransactionStatus.SUCCESS, transaction.id
+          TransactionStatus.SUCCESS,
+          transaction.id,
         );
-        await this.cacheManager.del(options.idUser);
+        await this.cacheManager.del(options.userId);
         await msg.reply(`Rút tiền thành công`);
-        await msg.reply(
-          'Tôi có thể giúp gì tiếp cho bạn',
-          this.keyboardMarkup,
-        );
+        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
         return;
       }
     }
   }
   async handleHistoryAction(msg: any, options: any, data: DataCache) {
-    const address = await this.wallerService.checkAddress(options.idUser);
+    const address = await this.wallerService.checkAddress(options.userId);
 
-    const listHistory =
-      await this.transactionService.getListHistory(address);
+    const listHistory = await this.transactionService.getListHistory(address);
     if (data.step === 1) {
       const amountHistory = options.text;
       if (!Number(amountHistory)) {
-        await this.cacheManager.del(options.idUser);
-        return await msg.reply(
-          'Vui lòng thực hiện lại',
-          this.keyboardMarkup,
-        );
+        await this.cacheManager.del(options.userId);
+        return await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
       } else if (Number(listHistory) < Number(amountHistory)) {
-        await this.cacheManager.del(options.idUser);
+        await this.cacheManager.del(options.userId);
         return await msg.reply(
           `Xin lỗi bạn chỉ có ${listHistory} giao dịch thôi`,
           this.keyboardMarkup,
         );
       } else {
-        const selectHistory =
-          await this.transactionService.getAmountHistory(
-            Number(amountHistory),
-            address,
-          );
+        const selectHistory = await this.transactionService.getAmountHistory(
+          Number(amountHistory),
+          address,
+        );
         for (const item of selectHistory) {
           await msg.reply(
             `Mã giao dịch:\n ${item?.id}\nSố tiền: ${item?.balance}\nKiểu: ${item?.type}\nTài khoản nguồn: ${item.senderAddress}\nTài khoản nhận: ${item.receiverAddress}\n Trạng thái: ${item.status}`,
           );
         }
-        await this.cacheManager.del(options.idUser);
-        await msg.reply(
-          'Tôi có thể giúp gì tiếp cho bạn',
-          this.keyboardMarkup,
-        );
+        await this.cacheManager.del(options.userId);
+        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
       }
     }
   }
@@ -371,7 +356,7 @@ export class TelegramService {
         await this.wallerService.checkWalletByAddress(address);
       if (checkAddress === WalletStatus.NOT_FOUND) {
         await msg.reply(`Địa chỉ người dùng không tồn tại`);
-        await this.cacheManager.del(options.idUser);
+        await this.cacheManager.del(options.userId);
         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
         return;
       }
@@ -384,14 +369,14 @@ export class TelegramService {
       }
     } else {
       await msg.reply(`Có gì đó không ổn vui lòng thử lại`);
-      await this.cacheManager.del(options.idUser);
+      await this.cacheManager.del(options.userId);
     }
   }
   async handleSendMoneyAction(msg: any, options: any, data: DataCache) {
     if (data.action === Action.SEND_MONEY_ADDRESS) {
       const money = options.text;
       if (!Number(money)) {
-        await this.cacheManager.del(options.idUser);
+        await this.cacheManager.del(options.userId);
         return await msg.reply(
           'Vui lòng thực hiện lại',
           this.keyTransferMethod,
@@ -400,12 +385,10 @@ export class TelegramService {
       if (Number(money) && Number(money) > 0) {
         data.money = options.text;
         data.step = 2;
-        await this.cacheManager.set(options.idUser, data, 30000);
+        await this.cacheManager.set(options.userId, data, 30000);
       }
       const receiver = data.receiver;
-      const sender = await this.wallerService.getAddressById(
-        options.idUser,
-      );
+      const sender = await this.wallerService.getAddressById(options.userId);
       const createTransaction = {
         balance: String(data.money),
         type: Action.SEND_MONEY_ADDRESS,
@@ -413,55 +396,53 @@ export class TelegramService {
         receiverAddress: receiver,
         status: TransactionStatus.CREATED,
       };
-      //initialize Transaction and save to db
-      const transaction = await this.transactionService.createTransaction(createTransaction);
+      const transaction =
+        await this.transactionService.createTransaction(createTransaction);
       await msg.reply(`processing...`);
       const checkStatus = await this.wallerService.sendMoneybyAddress(
-        options.idUser,
+        options.userId,
         receiver,
         money,
       );
       await this.transactionService.updateTransactionState(
-        TransactionStatus.PENDING, transaction.id
+        TransactionStatus.PENDING,
+        transaction.id,
       );
       if (checkStatus === TransactionStatus.SUCCESS && data.step === 2) {
         await this.transactionService.updateTransactionState(
-          TransactionStatus.SUCCESS, transaction.id
+          TransactionStatus.SUCCESS,
+          transaction.id,
         );
         await msg.reply(`Chuyển tiền thành công`);
         data.step = 1;
         data.action = '';
-        await msg.reply(
-          'Tôi có thể giúp gì tiếp cho bạn',
-          this.keyboardMarkup,
-        );
+        await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
       } else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
         await msg.reply(
           `Không đủ tiền trong tài khoản, vui lòng thử lại`,
           this.keyTransferMethod,
         );
-        this.cacheManager.del(options.idUser);
-
+        this.cacheManager.del(options.userId);
       } else if (checkStatus === WalletStatus.SELF) {
         await msg.reply(
           `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`,
         );
-        this.cacheManager.del(options.idUser);
+        this.cacheManager.del(options.userId);
         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
       } else {
         await msg.reply(`Chuyển tiền thất bại`, this.keyTransferMethod);
         await this.transactionService.updateTransactionState(
-          TransactionStatus.FAIL, transaction.id
+          TransactionStatus.FAIL,
+          transaction.id,
         );
-        this.cacheManager.del(options.idUser);
-
+        this.cacheManager.del(options.userId);
       }
     }
   }
   //Button Handler
   async setCache(options: any, action: Action, step: number) {
     await this.cacheManager.set(
-      options.user_id,
+      options.userId,
       {
         action: action,
         step: step,
@@ -469,15 +450,20 @@ export class TelegramService {
       30000,
     );
   }
-  async handleCreateAccountButton(msg: any, options: any, data: DataCache, checkUser: any) {
+  async handleCreateAccountButton(
+    msg: any,
+    options: any,
+    data: DataCache,
+    checkUser: any,
+  ) {
     if (data.action === '') {
       if (!checkUser) {
         const wallet = await this.wallerService.generateNewWallet();
         const user = {
-          id_user: msg.chat.id,
-          user_name: msg.chat.first_name,
+          userId: msg.chat.id,
+          username: msg.chat.first_name,
         };
-        await msg.reply(`Tạo tài khoản cho user ${user.id_user}`);
+        await msg.reply(`Tạo tài khoản cho user ${user.userId}`);
         const data = await this.wallerService.createWallet(
           {
             ...wallet,
@@ -489,23 +475,28 @@ export class TelegramService {
         if (data) {
           await msg.reply(`Tạo tài khoản thành công`);
           await msg.reply(
-            `Xin chào ${options.user_name}, tôi có thể giúp gì cho bạn!`,
+            `Xin chào ${options.userId}, tôi có thể giúp gì cho bạn!`,
             this.keyboardMarkup,
           );
-          await this.cacheManager.del(options.user_id);
+          await this.cacheManager.del(options.userId);
         }
       } else {
-        await this.cacheManager.del(options.user_id);
+        await this.cacheManager.del(options.userId);
         return await msg.reply(
           'Bạn đã có tài khoản vui lòng thực hiện chức năng khác',
           this.keyboardMarkup,
         );
       }
     } else {
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
     }
   }
-  async handleDepositButton(msg: any, options: any, data: DataCache, checkUser: any) {
+  async handleDepositButton(
+    msg: any,
+    options: any,
+    data: DataCache,
+    checkUser: any,
+  ) {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
@@ -514,12 +505,17 @@ export class TelegramService {
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.DEPOSIT, 1);
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     }
   }
-  async handleWithDrawButton(msg: any, options: any, data: DataCache, checkUser: any) {
+  async handleWithDrawButton(
+    msg: any,
+    options: any,
+    data: DataCache,
+    checkUser: any,
+  ) {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
@@ -528,19 +524,23 @@ export class TelegramService {
       await msg.reply('Bạn muốn rút bao nhiêu tiền');
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.WITHDRAW, 1);
       await msg.reply('Bạn muốn rút bao nhiêu tiền');
     }
   }
-  async handleHistoryButton(msg: any, options: any, data: DataCache, checkUser: any) {
+  async handleHistoryButton(
+    msg: any,
+    options: any,
+    data: DataCache,
+    checkUser: any,
+  ) {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    const address = await this.wallerService.checkAddress(options.user_id);
+    const address = await this.wallerService.checkAddress(options.userId);
 
-    const listHistory =
-      await this.transactionService.getListHistory(address);
+    const listHistory = await this.transactionService.getListHistory(address);
     if (Number(listHistory) === 0) {
       await msg.reply('Bạn không có lịch sử giao dịch nào');
       return await msg.reply(
@@ -555,44 +555,59 @@ export class TelegramService {
       );
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.HISTORY, 1);
       await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
     }
   }
-  async handleInformationButton(msg: any, options: any, data: any, checkUser: any) {
+  async handleInformationButton(
+    msg: any,
+    options: any,
+    data: any,
+    checkUser: any,
+  ) {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
     if (data.action !== '') {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.INFORMATION, 1);
     }
-    const info = await this.wallerService.checkInformation(options.user_id);
+    const info = await this.wallerService.checkInformation(options.userId);
     await msg.reply(`Private Key:${info.privateKey}`);
     await msg.reply(`Public Key:${info.publicKey}`);
     await msg.reply(`Address:${info.address}`);
-    const add = await this.wallerService.getAddressById(options.user_id);
+    const add = await this.wallerService.getAddressById(options.userId);
     const balane = await this.wallerService.getBalance(add);
-    await msg.reply(`Username:${info.user_name} \n Balance:${balane}`);
+    await msg.reply(`username:${info.username} \n Balance:${balane}`);
     await msg.reply('Tôi có thể giúp gì tiếp cho bạn', this.keyboardMarkup);
-    await this.cacheManager.del(options.user_id);
+    await this.cacheManager.del(options.userId);
   }
-  async handleTransactionButton(msg: any, options: any, data: any, checkUser: any) {
+  async handleTransactionButton(
+    msg: any,
+    options: any,
+    data: any,
+    checkUser: any,
+  ) {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    if(data.action !==''){
+    if (data.action !== '') {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.TRANSACTION, 1);
     }
     await msg.reply('Phương thức chuyển tiền:', this.keyTransactionService);
   }
-  async handleWalletAddressButton(msg: any, options: any, data: DataCache, checkUser: any) {
+  async handleWalletAddressButton(
+    msg: any,
+    options: any,
+    data: DataCache,
+    checkUser: any,
+  ) {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
@@ -601,7 +616,7 @@ export class TelegramService {
       await msg.reply('Điền địa chỉ người nhận');
     } else {
       await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.user_id);
+      await this.cacheManager.del(options.userId);
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       await msg.reply('Điền địa chỉ người nhận');
     }
@@ -619,7 +634,7 @@ export class TelegramService {
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    await this.cacheManager.del(options.user_id);
+    await this.cacheManager.del(options.userId);
     await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
   }
 }

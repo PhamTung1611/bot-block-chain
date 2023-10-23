@@ -6,8 +6,11 @@ import { TransactionService } from 'src/transaction/transaction.service';
 import { WalletService } from 'src/wallet/wallet.service';
 import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
-import { Action } from './enum/action.enum';
+//import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
+import { Action, On, Start } from 'nestjs-telegraf';
+import { Context } from 'vm';
+import { TelegramAction } from './enum/action.enum';
 interface DataCache {
   action: string;
   step: number;
@@ -54,14 +57,16 @@ export class TelegramService {
     private transactionService: TransactionService,
     private wallerService: WalletService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-  ) {
-    this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
-    this.bot.start(this.handleStart.bind(this));
-    this.bot.on('text', this.handleMessage.bind(this));
-    this.bot.action(/.*/, this.handleButton.bind(this));
-    this.bot.launch();
+  ) {}
+  @Start()
+  async startCommand(ctx: Context) {
+    await this.handleStart(ctx);
   }
-
+  @On('text')
+  async onSticker(ctx: Context) {
+    await this.handleMessage(ctx);
+  }
+  @Action('/.*/')
   async handleStart(ctx: any) {
     const options = {
       userId: ctx.update.message.from.id,
@@ -95,19 +100,19 @@ export class TelegramService {
       );
     }
     switch (data.action) {
-      case Action.DEPOSIT:
+      case TelegramAction.DEPOSIT:
         await this.handleDepositAction(msg, options, data);
         break;
-      case Action.WITHDRAW:
+      case TelegramAction.WITHDRAW:
         await this.handleWithDrawAction(msg, options, data);
         break;
-      case Action.HISTORY:
+      case TelegramAction.HISTORY:
         await this.handleHistoryAction(msg, options, data);
         break;
-      case Action.TRANSFER_BY_ADDRESS:
+      case TelegramAction.TRANSFER_BY_ADDRESS:
         await this.handleTransferByAddressAction(msg, options, data);
         break;
-      case Action.SEND_MONEY_ADDRESS:
+      case TelegramAction.SEND_MONEY_ADDRESS:
         await this.handleSendMoneyAction(msg, options, data);
         break;
       default:
@@ -367,8 +372,8 @@ export class TelegramService {
         await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
         return;
       }
-      if (data.action === Action.TRANSFER_BY_ADDRESS) {
-        data.action = Action.SEND_MONEY_ADDRESS;
+      if (data.action === TelegramAction.TRANSFER_BY_ADDRESS) {
+        data.action = TelegramAction.SEND_MONEY_ADDRESS;
         data.step = 3;
         data.receiver = address;
         await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
@@ -380,7 +385,7 @@ export class TelegramService {
     }
   }
   async handleSendMoneyAction(msg: any, options: any, data: DataCache) {
-    if (data.action === Action.SEND_MONEY_ADDRESS) {
+    if (data.action === TelegramAction.SEND_MONEY_ADDRESS) {
       const money = options.text;
       if (!Number(money)) {
         await this.cacheManager.del(options.userId);
@@ -398,7 +403,7 @@ export class TelegramService {
       const sender = await this.wallerService.getAddressById(options.userId);
       const createTransaction = {
         balance: String(data.money),
-        type: Action.SEND_MONEY_ADDRESS,
+        type: TelegramAction.SEND_MONEY_ADDRESS,
         senderAddress: sender,
         receiverAddress: receiver,
         status: TransactionStatus.CREATED,
@@ -447,7 +452,7 @@ export class TelegramService {
     }
   }
   //Button Handler
-  async setCache(options: any, action: Action, step: number) {
+  async setCache(options: any, action: TelegramAction, step: number) {
     await this.cacheManager.set(
       options.userId,
       {
@@ -508,12 +513,12 @@ export class TelegramService {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
     if (data.action === '') {
-      this.setCache(options, Action.DEPOSIT, 1);
+      this.setCache(options, TelegramAction.DEPOSIT, 1);
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     } else {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.DEPOSIT, 1);
+      this.setCache(options, TelegramAction.DEPOSIT, 1);
       await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     }
   }
@@ -527,12 +532,12 @@ export class TelegramService {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
     if (data.action === '') {
-      this.setCache(options, Action.WITHDRAW, 1);
+      this.setCache(options, TelegramAction.WITHDRAW, 1);
       await msg.reply('Bạn muốn rút bao nhiêu tiền');
     } else {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.WITHDRAW, 1);
+      this.setCache(options, TelegramAction.WITHDRAW, 1);
       await msg.reply('Bạn muốn rút bao nhiêu tiền');
     }
   }
@@ -556,14 +561,14 @@ export class TelegramService {
       );
     }
     if (data.action === '') {
-      this.setCache(options, Action.HISTORY, 1);
+      this.setCache(options, TelegramAction.HISTORY, 1);
       await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
     } else {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.HISTORY, 1);
+      this.setCache(options, TelegramAction.HISTORY, 1);
       await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
@@ -581,7 +586,7 @@ export class TelegramService {
     if (data.action !== '') {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.INFORMATION, 1);
+      this.setCache(options, TelegramAction.INFORMATION, 1);
     }
     const info = await this.wallerService.checkInformation(options.userId);
     await msg.reply(`Private Key:${info.privateKey}`);
@@ -605,7 +610,7 @@ export class TelegramService {
     if (data.action !== '') {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.TRANSACTION, 1);
+      this.setCache(options, TelegramAction.TRANSACTION, 1);
     }
     await msg.reply('Phương thức chuyển tiền:', this.keyTransactionService);
   }
@@ -619,12 +624,12 @@ export class TelegramService {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
     if (data.action === '') {
-      this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
+      this.setCache(options, TelegramAction.TRANSFER_BY_ADDRESS, 1);
       await msg.reply('Điền địa chỉ người nhận');
     } else {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
+      this.setCache(options, TelegramAction.TRANSFER_BY_ADDRESS, 1);
       await msg.reply('Điền địa chỉ người nhận');
     }
   }

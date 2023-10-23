@@ -1,4 +1,4 @@
-export enum Action {
+export enum TelegramAction {
   DEPOSIT = 'Deposit',
   WITHDRAW = 'Withdraw',
   TRANSACTION = 'Transaction',

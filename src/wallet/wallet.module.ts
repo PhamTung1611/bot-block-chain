@@ -5,7 +5,7 @@ import { WalletService } from './wallet.service';
 import { ConfigModule } from '@nestjs/config';
 
 import { BullModule } from '@nestjs/bullmq';
-import { WalletProcessor } from './wallet.processor.fix';
+import { WalletProcessor } from './wallet.processor';
 @Module({
   imports: [
     TypeOrmModule.forFeature([WalletEntity]),

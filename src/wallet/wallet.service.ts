@@ -10,7 +10,7 @@ import { abiChain } from 'src/constants/abis/abichain';
 import { ConfigService } from '@nestjs/config';
 
 import { InjectQueue } from '@nestjs/bull';
-import { Job, Queue, QueueEvents } from 'bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class WalletService {
@@ -49,22 +49,9 @@ export class WalletService {
       value: ethers.parseUnits('0.01', 'ether'),
     });
   }
-
-  async mint(address: string, amount: Uint256) {
-    const sourceWallet = new Wallet(
-      this.configService.get('adminPrivateKey'),
-      this.provider,
-    );
-    const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
-    const txResponse = await contract.mint(
-      address,
-      this.convertToEther(Number(amount)),
-    );
-    if (txResponse) {
-      return true;
-    } else {
-      return false;
-    }
+  async mint(address: string, amount: number) {
+    const job = await this.walletQueue.add('mint-token', { address, amount });
+    return job;
   }
 
   async addAuthorizedOwner(newOwner: string) {
@@ -85,21 +72,13 @@ export class WalletService {
     return balance;
   }
 
-  async burn(amount: Uint256, privateKey: string) {
-    try {
-      const sourceWallet = new Wallet(privateKey, this.provider);
-      const contract = new Contract(
-        this.contractAddress,
-        abiChain,
-        sourceWallet,
-      );
-      const tx = await contract.burn(this.convertToEther(Number(amount)));
-      await tx.wait();
-      return true;
-    } catch (error) {
-      console.log(error);
-      return false;
-    }
+  async burn(amount: Uint256, privateKey: string, address: string) {
+    const job = await this.walletQueue.add('burn-token', {
+      address,
+      amount,
+      privateKey,
+    });
+    return job;
   }
   async transfer(toAddress: string, amount: number, privateKey: string) {
     const job = await this.walletQueue.add('transfer', {
@@ -107,7 +86,6 @@ export class WalletService {
       amount,
       privateKey,
     });
-    console.log(job.data);
     return job;
   }
   async generateNewWallet() {

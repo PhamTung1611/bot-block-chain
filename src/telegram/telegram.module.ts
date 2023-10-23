@@ -8,6 +8,7 @@ import { WalletEntity } from 'src/wallet/wallet.entity';
 import { TransactionModule } from 'src/transaction/transaction.module';
 import { WalletModule } from 'src/wallet/wallet.module';
 import { BullModule } from '@nestjs/bullmq';
+import { WalletService } from 'src/wallet/wallet.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([TransactionEntity, WalletEntity]),
@@ -19,7 +20,7 @@ import { BullModule } from '@nestjs/bullmq';
       prefix: 'telegram-bot',
     }),
   ],
-  providers: [TelegramService],
+  providers: [TelegramService, WalletService],
   exports: [TelegramService],
 })
 export class TelegramModule {}

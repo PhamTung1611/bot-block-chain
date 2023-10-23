@@ -208,7 +208,10 @@ export class TelegramService {
           await msg.reply('Tôi có thể giúp gì cho bạn', this.keyboardMarkup);
           return;
         }
-        const mint = await this.wallerService.mint(addressWallet, data.money);
+        const mint = await this.wallerService.mint(
+          addressWallet,
+          Number(data.money),
+        );
         await this.transactionService.updateTransactionState(
           TransactionStatus.PENDING,
           transaction.id,
@@ -294,7 +297,11 @@ export class TelegramService {
         );
         await msg.reply(`processing....`);
 
-        const burn = await this.wallerService.burn(data.money, privateKey);
+        const burn = await this.wallerService.burn(
+          data.money,
+          privateKey,
+          address,
+        );
         if (!burn) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,

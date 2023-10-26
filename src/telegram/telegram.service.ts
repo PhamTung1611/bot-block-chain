@@ -66,6 +66,7 @@ export class TelegramService {
   async onMessage(ctx: Context) {
     await this.handleMessage(ctx);
   }
+
   @Action(/.*/)
   async onClick(ctx: Context) {
     await this.handleButton(ctx);
@@ -522,7 +523,6 @@ export class TelegramService {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, TelegramAction.DEPOSIT, 1);
-      await msg.reply('Bạn muốn nạp bao nhiêu tiền');
     }
   }
   async handleWithDrawButton(

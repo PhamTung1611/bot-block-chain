@@ -97,11 +97,11 @@ export class WalletService {
   }
   async transfer(toAddress: string, amount: number, privateKey: string) {
     try {
-      const sourceWallet = new Wallet(privateKey, this.provider);
+      const senderWallet = new Wallet(privateKey, this.provider);
       const contract = new Contract(
-        toAddress,
+        this.contractAddress,
         abiChain,
-        sourceWallet,
+        senderWallet,
       );
       // Populate the transaction object with the incremented nonce value.
       const tx = await contract.transfer(

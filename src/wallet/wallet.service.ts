@@ -99,7 +99,7 @@ export class WalletService {
     try {
       const sourceWallet = new Wallet(privateKey, this.provider);
       const contract = new Contract(
-        this.contractAddress,
+        toAddress,
         abiChain,
         sourceWallet,
       );

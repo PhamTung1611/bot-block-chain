@@ -219,7 +219,7 @@ export class TelegramService {
         }
         const mint = await this.wallerService.mint(
           addressWallet,
-          Number(data.money),
+         data.money,
         );
         await this.transactionService.updateTransactionState(
           TransactionStatus.PENDING,
@@ -491,7 +491,7 @@ export class TelegramService {
         if (data) {
           await msg.reply(`Tạo tài khoản thành công`);
           await msg.reply(
-            `Xin chào ${options.userId}, tôi có thể giúp gì cho bạn!`,
+            `Xin chào ${options.username}, tôi có thể giúp gì cho bạn!`,
             this.keyboardMarkup,
           );
           await this.cacheManager.del(options.userId);

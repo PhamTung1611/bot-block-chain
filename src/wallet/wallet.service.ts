@@ -49,7 +49,7 @@ export class WalletService {
       value: ethers.parseUnits('0.01', 'ether'),
     });
   }
-  async mint(address: string, amount: number) {
+  async mint(address: string, amount: Uint256) {
     const job = await this.walletQueue.add('mint-token', { address, amount });
     return job;
   }

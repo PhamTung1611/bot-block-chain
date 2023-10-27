@@ -129,13 +129,13 @@ export class WalletService {
     return ethers.parseUnits(amount.toString(), 'ether');
   }
   async findOneUser(userId: string) {
-    const User = await this.walletRepository.findOne({
+    const user = await this.walletRepository.findOne({
       where: { userId: userId },
     });
-    if (User) {
-      return true;
+    if (user) {
+      return user;
     } else {
-      return false;
+      return undefined;
     }
   }
   async deposit(toAddress: string, amount: number) {

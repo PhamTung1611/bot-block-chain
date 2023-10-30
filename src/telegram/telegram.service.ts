@@ -79,17 +79,19 @@ export class TelegramService {
         this.keyCreateAccount,
       );
     } else {
+      const nativeToken = await this.wallerService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`
     Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>\nĐây là địa chỉ ví của bạn!\n<code>${checkUser.address}</code>\n
-Hiện Tài khoản bạn đang có:<b> ${await this.wallerService.getUserNativeToken(checkUser.address)} PGX </b>\n
-Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}">tại đây!</a>\n 
-Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a> 
+Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
+Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
+Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a> 
 ` , this.keyboardMarkup);
+ctx.answer_callback_query()
       this.instance.push(message)
-      console.log(this.instance.length);
+      const length = this.instance.length;
       if (this.instance.length > 1) {
         this.instance.reverse();
-        this.deleteBotMessage(this.instance[1], 500);
+        this.deleteBotMessage(this.instance[length - 1], 0);
         this.instance.pop();
       }
 
@@ -374,10 +376,13 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
           messages.push(message);
           // this.deleteBotMessage(finalMessage, 10000)
         }
+        const message = msg.replyWithHTML(`Bạn đang xem <b>${selectHistory.length} giao dịch </b>`, this.handleStart(msg));
+    //    messages.push(message);
         await this.cacheManager.del(options.userId);
         for (const message of messages) {
-          this.deleteBotMessage(message, 3000);
+          this.deleteBotMessage(message, 30000);
         }
+
       }
     }
   }
@@ -398,7 +403,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         data.step = 3;
         data.receiver = address;
         const message = await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
-        this.deleteBotMessage(message,5000)
+        this.deleteBotMessage(message, 5000)
         return;
       }
     } else {
@@ -435,7 +440,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         await this.transactionService.createTransaction(createTransaction);
       const message = await msg.reply(`processing...`);
       messages.push(message);
-     // this.deleteBotMessage(finalMessage, 1000)
+      // this.deleteBotMessage(finalMessage, 1000)
 
       const checkStatus = await this.wallerService.sendMoneybyAddress(
         options.userId,
@@ -451,9 +456,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
           TransactionStatus.SUCCESS,
           transaction.id,
         );
-        const message = await msg.reply(`Chuyển tiền thành công`,this.handleStart(msg));
+        const message = await msg.reply(`Chuyển tiền thành công`, this.handleStart(msg));
         messages.push(message);
-       // this.deleteBotMessage(finalMessage, 1000)
+        // this.deleteBotMessage(finalMessage, 1000)
         data.step = 1;
         data.action = '';
       } else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
@@ -466,7 +471,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         this.cacheManager.del(options.userId);
       } else if (checkStatus === WalletStatus.SELF) {
         const message = await msg.reply(
-          `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`,this.handleStart(msg)
+          `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`, this.handleStart(msg)
         );
         messages.push(message);
         //this.deleteBotMessage(finalMessage, 2000)
@@ -475,7 +480,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
       } else {
         const message = await msg.reply(`Chuyển tiền thất bại`, this.handleStart(msg));
         messages.push(message);
-       // this.deleteBotMessage(finalMessage, 1000)
+        // this.deleteBotMessage(finalMessage, 1000)
         await this.transactionService.updateTransactionState(
           TransactionStatus.FAIL,
           transaction.id,
@@ -633,7 +638,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
     // const info = await this.wallerService.checkInformation(options.userId);
     const add = await this.wallerService.getAddressById(options.userId);
     const balane = await this.wallerService.getBalance(add);
-    const finalMessage = await msg.reply(`Balance:${balane} <b>HUSD</b>`);
+    const finalMessage = await msg.replyWithHTML(`Balance:${balane} <b>HUSD</b>`);
     this.deleteBotMessage(finalMessage, 30000)
     await this.cacheManager.del(options.userId);
   }

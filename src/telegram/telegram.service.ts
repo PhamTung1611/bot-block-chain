@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Markup, Telegraf } from 'telegraf';
+import { Context, Markup, Telegraf } from 'telegraf';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { TransactionService } from 'src/transaction/transaction.service';
@@ -8,6 +8,7 @@ import { WalletStatus } from 'src/wallet/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
+import { ConfigService } from '@nestjs/config';
 interface DataCache {
   action: string;
   step: number;
@@ -18,12 +19,13 @@ interface DataCache {
 
 @Injectable()
 export class TelegramService {
+  private instance: any[] = [];
   private bot: Telegraf;
   private keyboardMarkup = Markup.inlineKeyboard([
     [
       Markup.button.callback('Deposit', Button.DEPOSIT),
       Markup.button.callback('Withdraw', Button.WITHDRAW),
-      Markup.button.callback('Transaction Address', Button.WALLET_ADDRESS),
+      Markup.button.callback('Transfer', Button.WALLET_ADDRESS),
     ],
     [
       Markup.button.callback('Transaction History', Button.HISTORY),
@@ -54,9 +56,10 @@ export class TelegramService {
   constructor(
     private transactionService: TransactionService,
     private wallerService: WalletService,
+    private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
-    this.bot = new Telegraf('6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo');
+    this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
     this.bot.start(this.handleStart.bind(this));
     this.bot.on('text', this.handleMessage.bind(this));
     this.bot.action(/.*/, this.handleButton.bind(this));
@@ -72,17 +75,24 @@ export class TelegramService {
 
     if (!checkUser) {
       await ctx.replyWithHTML(
-        `Xin chào <b> ${options.username}</b>! Bạn chưa có tài khoản vui lòng tạo một tài khoản để tiếp tục`,
+        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Bạn chưa có tài khoản vui lòng tạo một tài khoản để tiếp tục`,
         this.keyCreateAccount,
       );
     } else {
-      await ctx.replyWithHTML(`
-    Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>
-Đây là địa chỉ ví của bạn!<code>${checkUser.address}</code>
-Hiện Tài khoản bạn đang có:<b> ${await this.wallerService.getUserNativeToken(checkUser.address)} PGX </b>
-Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}">tại đây!</a> 
+      const message = await ctx.replyWithHTML(`
+    Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>\nĐây là địa chỉ ví của bạn!\n<code>${checkUser.address}</code>\n
+Hiện Tài khoản bạn đang có:<b> ${await this.wallerService.getUserNativeToken(checkUser.address)} PGX </b>\n
+Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}">tại đây!</a>\n 
 Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a> 
 ` , this.keyboardMarkup);
+      this.instance.push(message)
+      console.log(this.instance.length);
+      if (this.instance.length > 1) {
+        this.instance.reverse();
+        this.deleteBotMessage(this.instance[1], 500);
+        this.instance.pop();
+      }
+
     }
   }
   async handleMessage(msg: any) {
@@ -170,13 +180,14 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
   }
   //Action Handler
   async handleDepositAction(msg: any, options: any, data: DataCache) {
-    // Delete bot message but keep user message
+    const messages = [];
     if (data.step === 1) {
       const Money = options.text;
       if (!Number(Money)) {
         await this.cacheManager.del(options.userId);
-        const finalMessage = await msg.reply('Vui lòng thực hiện lại');
-        this.deleteBotMessage(finalMessage, 1000)
+        const message = await msg.reply('Vui lòng thực hiện lại');
+        //this.deleteBotMessage(finalMessage, 1000)
+        messages.push(message);
       }
       if (Number(Money) && Number(Money) > 0) {
         data.money = options.text;
@@ -184,8 +195,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         await this.cacheManager.set(options.userId, data, 30000);
       } else {
         await this.cacheManager.del(options.userId);
-        const finalMessage = await msg.reply(`Vui lòng thực hiện lại`);
-        this.deleteBotMessage(finalMessage, 1000)
+        const message = await msg.reply(`Vui lòng thực hiện lại`);
+        // this.deleteBotMessage(finalMessage, 1000)
+        messages.push(message);
       }
       if (data.step === 2) {
         await this.cacheManager.set(options.userId, data, 30000);
@@ -202,11 +214,13 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         };
         const transaction =
           await this.transactionService.createTransaction(createTransaction);
-        const finalMessage = await msg.reply(`processing...`);
-        this.deleteBotMessage(finalMessage, 2000)
+        const message = await msg.reply(`processing...`);
+        messages.push(message);
+        // this.deleteBotMessage(finalMessage, 2000)
         if (data.money.toString().length > 65) {
-          const finalMessage = await msg.reply(`Số tiền quá lớn`);
-          this.deleteBotMessage(finalMessage, 1000)
+          const message = await msg.reply(`Số tiền quá lớn`);
+          messages.push(message);
+          // this.deleteBotMessage(finalMessage, 1000)
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
             transaction.id,
@@ -226,8 +240,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
             transaction.id,
           );
           await this.cacheManager.del(options.userId);
-          const finalMessage = await msg.reply(`Nạp tiền thất bại`);
-          this.deleteBotMessage(finalMessage, 1000)
+          const message = await msg.reply(`Nạp tiền thất bại`);
+          messages.push(message);
+          //this.deleteBotMessage(finalMessage, 1000)
           return;
         } else {
           await this.transactionService.updateTransactionState(
@@ -235,28 +250,36 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
             transaction.id,
           );
           await this.cacheManager.del(options.userId);
-          const finalMessage = await msg.reply(`Nạp tiền thành công`);
-          this.deleteBotMessage(finalMessage, 1000)
+          const message = await msg.reply(`Nạp tiền thành công`, this.handleStart(msg));
+          messages.push(message);
+          console.log(messages);
+          for (const message of messages) {
+            this.deleteBotMessage(message, 3000);
+          }
+          //this.deleteBotMessage(finalMessage, 1000)
           return;
         }
       }
     }
   }
   async handleWithDrawAction(msg: any, options: any, data: DataCache) {
+    const messages = [];
     if (data.step === 1) {
       const Money = options.text;
       if (!Number(Money)) {
         await this.cacheManager.del(options.userId);
-        const finalMessage = await msg.reply('Vui lòng thực hiện lại');
-        this.deleteBotMessage(finalMessage, 1000)
+        const message = await msg.reply('Vui lòng thực hiện lại');
+        messages.push(message);
+        //this.deleteBotMessage(finalMessage, 1000)
       }
       if (Number(Money) && Number(Money) > 0) {
         data.money = options.text;
         data.step = 2;
         await this.cacheManager.set(options.userId, data, 30000);
       } else {
-        const finalMessage = await msg.reply(`Rút tiền thất bại, vui lòng thử lại`);
-        this.deleteBotMessage(finalMessage, 1000)
+        const message = await msg.reply(`Rút tiền thất bại, vui lòng thử lại`);
+        messages.push(message);
+        // this.deleteBotMessage(finalMessage, 1000)
         await this.cacheManager.del(options.userId);
       }
       if (data.step === 2) {
@@ -275,8 +298,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         const balance = await this.wallerService.getBalance(address);
         if (Number(balance) < Number(data.money)) {
           await this.cacheManager.del(options.userId);
-          const finalMessage = await msg.reply(`Tài khoản không đủ tiền`);
-          this.deleteBotMessage(finalMessage, 1000)
+          const message = await msg.reply(`Tài khoản không đủ tiền`);
+          messages.push(message);
+          //this.deleteBotMessage(finalMessage, 1000)
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
             transaction.id,
@@ -290,8 +314,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
           TransactionStatus.PENDING,
           transaction.id,
         );
-        const finalMessage = await msg.reply(`processing....`);
-        this.deleteBotMessage(finalMessage, 3000)
+        const message = await msg.reply(`processing....`);
+        messages.push(message);
+        //   this.deleteBotMessage(finalMessage, 3000)
 
         const burn = await this.wallerService.burn(data.money, privateKey);
         if (!burn) {
@@ -299,8 +324,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
             TransactionStatus.FAIL,
             transaction.id,
           );
-          const finalMessage = await msg.reply(`Rút tiền thất bại`);
-          this.deleteBotMessage(finalMessage, 1000)
+          const message = await msg.reply(`Rút tiền thất bại`);
+          messages.push(message);
+          // this.deleteBotMessage(finalMessage, 1000)
           return;
         }
         await this.transactionService.updateTransactionState(
@@ -308,13 +334,18 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
           transaction.id,
         );
         await this.cacheManager.del(options.userId);
-        const finalMess = await msg.reply(`Rút tiền thành công`);
-        this.deleteBotMessage(finalMess, 1000)
+        const message1 = await msg.reply(`Rút tiền thành công`, this.handleStart(msg));
+        messages.push(message1);
+        // this.deleteBotMessage(finalMess, 1000)
+        for (const message of messages) {
+          this.deleteBotMessage(message, 3000);
+        }
         return;
       }
     }
   }
   async handleHistoryAction(msg: any, options: any, data: DataCache) {
+    const messages = [];
     const address = await this.wallerService.checkAddress(options.userId);
 
     const listHistory = await this.transactionService.getListHistory(address);
@@ -322,25 +353,31 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
       const amountHistory = options.text;
       if (!Number(amountHistory)) {
         await this.cacheManager.del(options.userId);
-        const finalMessage =  await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
-        return this.deleteBotMessage(finalMessage,1000)
+        const message = await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
+        messages.push(message);
+        //return this.deleteBotMessage(finalMessage, 1000)
       } else if (Number(listHistory) < Number(amountHistory)) {
         await this.cacheManager.del(options.userId);
-        const finalMessage =  await msg.reply(
+        const message = await msg.reply(
           `Xin lỗi bạn chỉ có ${listHistory} giao dịch thôi`);
-        this.deleteBotMessage(finalMessage,1000)
+        messages.push(message);
+        // this.deleteBotMessage(finalMessage, 1000)
       } else {
         const selectHistory = await this.transactionService.getAmountHistory(
           Number(amountHistory),
           address,
         );
         for (const item of selectHistory) {
-          const finalMessage = await msg.reply(
+          const message = await msg.reply(
             `Mã giao dịch:\n ${item?.id}\nSố tiền: ${item?.balance}\nKiểu: ${item?.type}\nTài khoản nguồn: ${item.senderAddress}\nTài khoản nhận: ${item.receiverAddress}\n Trạng thái: ${item.status}`,
           );
-          this.deleteBotMessage(finalMessage,10000)
+          messages.push(message);
+          // this.deleteBotMessage(finalMessage, 10000)
         }
         await this.cacheManager.del(options.userId);
+        for (const message of messages) {
+          this.deleteBotMessage(message, 3000);
+        }
       }
     }
   }
@@ -360,8 +397,8 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         data.action = Action.SEND_MONEY_ADDRESS;
         data.step = 3;
         data.receiver = address;
-        const finalMessage = await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
-        this.deleteBotMessage(finalMessage,3000)
+        const message = await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
+        this.deleteBotMessage(message,5000)
         return;
       }
     } else {
@@ -370,6 +407,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
     }
   }
   async handleSendMoneyAction(msg: any, options: any, data: DataCache) {
+    const messages = [];
     if (data.action === Action.SEND_MONEY_ADDRESS) {
       const money = options.text;
       if (!Number(money)) {
@@ -395,8 +433,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
       };
       const transaction =
         await this.transactionService.createTransaction(createTransaction);
-        const finalMessage = await msg.reply(`processing...`);
-        this.deleteBotMessage(finalMessage,1000)
+      const message = await msg.reply(`processing...`);
+      messages.push(message);
+     // this.deleteBotMessage(finalMessage, 1000)
 
       const checkStatus = await this.wallerService.sendMoneybyAddress(
         options.userId,
@@ -412,33 +451,40 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
           TransactionStatus.SUCCESS,
           transaction.id,
         );
-        const finalMessage = await msg.reply(`Chuyển tiền thành công`);
-        this.deleteBotMessage(finalMessage,1000)
+        const message = await msg.reply(`Chuyển tiền thành công`,this.handleStart(msg));
+        messages.push(message);
+       // this.deleteBotMessage(finalMessage, 1000)
         data.step = 1;
         data.action = '';
       } else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
-        const finalMessage = await msg.reply(
+        const message = await msg.reply(
           `Không đủ tiền trong tài khoản, vui lòng thử lại`,
-          this.keyTransferMethod,
+          this.handleStart(msg),
         );
-        this.deleteBotMessage(finalMessage,1000)
+        messages.push(message);
+        //this.deleteBotMessage(finalMessage, 1000)
         this.cacheManager.del(options.userId);
       } else if (checkStatus === WalletStatus.SELF) {
-        const finalMessage = await msg.reply(
-          `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`,
+        const message = await msg.reply(
+          `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`,this.handleStart(msg)
         );
-        this.deleteBotMessage(finalMessage,2000)
+        messages.push(message);
+        //this.deleteBotMessage(finalMessage, 2000)
 
         this.cacheManager.del(options.userId);
       } else {
-        const finalMessage = await msg.reply(`Chuyển tiền thất bại`, this.keyTransferMethod);
-        this.deleteBotMessage(finalMessage,1000)
+        const message = await msg.reply(`Chuyển tiền thất bại`, this.handleStart(msg));
+        messages.push(message);
+       // this.deleteBotMessage(finalMessage, 1000)
         await this.transactionService.updateTransactionState(
           TransactionStatus.FAIL,
           transaction.id,
         );
         this.cacheManager.del(options.userId);
       }
+    }
+    for (const message of messages) {
+      this.deleteBotMessage(message, 3000);
     }
   }
   //Button Handler
@@ -505,13 +551,13 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
     if (data.action === '') {
       this.setCache(options, Action.DEPOSIT, 1);
       const finalMessage = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 2000)
+      this.deleteBotMessage(finalMessage, 10000)
     } else {
       await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.DEPOSIT, 1);
       const finalMessage = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 1000)
+      this.deleteBotMessage(finalMessage, 10000)
     }
   }
   async handleWithDrawButton(
@@ -526,7 +572,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
     if (data.action === '') {
       this.setCache(options, Action.WITHDRAW, 1);
       const finalMessage = await msg.reply('Bạn muốn rút bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 1000)
+      this.deleteBotMessage(finalMessage, 10000)
 
     } else {
       // const finalMessage = await msg.reply(`Canceling ${data.action}`);
@@ -534,7 +580,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.WITHDRAW, 1);
       const finalMessage = await msg.reply('Bạn muốn rút bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 1000)
+      this.deleteBotMessage(finalMessage, 10000)
 
     }
   }
@@ -551,15 +597,15 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
 
     const listHistory = await this.transactionService.getListHistory(address);
     if (Number(listHistory) === 0) {
-      const finalMessage =  await msg.reply('Bạn không có lịch sử giao dịch nào');
-      return this.deleteBotMessage(finalMessage,2000)
+      const finalMessage = await msg.reply('Bạn không có lịch sử giao dịch nào');
+      return this.deleteBotMessage(finalMessage, 10000)
     }
     if (data.action === '') {
       this.setCache(options, Action.HISTORY, 1);
       const finalMessage = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(finalMessage,2000)
+      this.deleteBotMessage(finalMessage, 30000)
     } else {
       // await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
@@ -567,7 +613,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
       const finalMessage = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(finalMessage,2000)
+      this.deleteBotMessage(finalMessage, 30000)
     }
   }
   async handleInformationButton(
@@ -587,8 +633,8 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
     // const info = await this.wallerService.checkInformation(options.userId);
     const add = await this.wallerService.getAddressById(options.userId);
     const balane = await this.wallerService.getBalance(add);
-    const finalMessage = await msg.reply(`Balance:${balane} HUSD`);
-    this.deleteBotMessage(finalMessage, 1000)
+    const finalMessage = await msg.reply(`Balance:${balane} <b>HUSD</b>`);
+    this.deleteBotMessage(finalMessage, 30000)
     await this.cacheManager.del(options.userId);
   }
   async handleTransactionButton(
@@ -619,13 +665,13 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
     if (data.action === '') {
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       const finalMessage = await msg.reply('Điền địa chỉ người nhận');
-      this.deleteBotMessage(finalMessage,1000)
+      this.deleteBotMessage(finalMessage, 30000)
     } else {
       // await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       const finalMessage = await msg.reply('Điền địa chỉ người nhận');
-      this.deleteBotMessage(finalMessage,5000)
+      this.deleteBotMessage(finalMessage, 30000)
     }
   }
   async handleTransferButton(msg: any, checkUser: any) {
@@ -643,12 +689,12 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
     }
     await this.cacheManager.del(options.userId);
     const finalMessage = await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
-    this.deleteBotMessage(finalMessage,1000)
+    this.deleteBotMessage(finalMessage, 30000)
   }
   async deleteBotMessage(message: any, delay: number) {
     const chatId = message.chat.id;
     const messageId = message.message_id;
-    const token = '6330110829:AAGF5ZD-7AVlHUt57g1K3AcnFc4dWBjzSyo'; // Thay thế YOUR_TELEGRAM_BOT_TOKEN bằng mã thông báo bot của bạn
+    const token = this.configService.get('bot-token'); // Thay thế YOUR_TELEGRAM_BOT_TOKEN bằng mã thông báo bot của bạn
     setTimeout(async () => {
       const bot = new Telegraf(token);
       await bot.telegram.deleteMessage(chatId, messageId);

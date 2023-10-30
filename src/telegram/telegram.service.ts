@@ -60,17 +60,6 @@ export class TelegramService {
     this.bot.start(this.handleStart.bind(this));
     this.bot.on('text', this.handleMessage.bind(this));
     this.bot.action(/.*/, this.handleButton.bind(this));
-    this.bot.command('your command', async (ctx) => {
-      return await ctx.reply('this is text', Markup
-        .keyboard([
-          ['button 1', 'button 2'], // Row1 with 2 buttons
-          ['button 3', 'button 4'], // Row2 with 2 buttons
-          ['button 5', 'button 6', 'button 7'] // Row3 with 3 buttons
-        ])
-        .oneTime()
-        .resize()
-      )
-    })
     this.bot.launch();
   }
 

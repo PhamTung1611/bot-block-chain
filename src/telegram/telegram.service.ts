@@ -76,8 +76,12 @@ export class TelegramService {
       );
     } else {
       await ctx.replyWithHTML(`
-    Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> , Đây là địa chỉ ví của bạn!<code>${checkUser.address}</code>
-Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}">tại đây!</a> ` ,this.keyboardMarkup);
+    Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>
+Đây là địa chỉ ví của bạn!<code>${checkUser.address}</code>
+Hiện Tài khoản bạn đang có:<b> ${await this.wallerService.getUserNativeToken(checkUser.address)} PGX </b>
+Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}">tại đây!</a> 
+Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a> 
+` ,this.keyboardMarkup);
     }
   }
   async handleMessage(msg: any) {

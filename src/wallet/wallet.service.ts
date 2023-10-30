@@ -6,8 +6,8 @@ import { WalletStatus } from './wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
-import { abiChain } from 'src/constants/abis/abichain';
 import { ConfigService } from '@nestjs/config';
+import { abiChain } from 'src/constants/abis/husd.abi';
 
 @Injectable()
 export class WalletService {
@@ -56,13 +56,16 @@ export class WalletService {
       address,
       this.convertToEther(Number(amount)),
     );
+
     if (txResponse) {
       return true;
     } else {
       return false;
     }
   }
-
+ async getUserNativeToken(address: string){
+  return  ethers.formatUnits(await this.provider.getBalance(address))
+ }
   async addAuthorizedOwner(newOwner: string) {
     const adminWallet = this.adminWallet;
     const contract = new Contract(this.contractAddress, abiChain, adminWallet);

@@ -98,18 +98,17 @@ export class WalletService {
       return false;
     }
   }
-  async transfer(toAddress: string, amount: number, privateKey: string) {
+  async transfer(toAddress: string, amount: Uint256, privateKey: string) {
     try {
-      const senderWallet = new Wallet(privateKey, this.provider);
+      const sourceWallet = new Wallet(privateKey, this.provider);
       const contract = new Contract(
         this.contractAddress,
         abiChain,
-        senderWallet,
+        sourceWallet,
       );
-      // Populate the transaction object with the incremented nonce value.
       const tx = await contract.transfer(
         toAddress,
-        this.convertToEther(amount),
+        this.convertToEther(Number(amount)),
       );
       tx.nonce++;
       return true;
@@ -153,11 +152,7 @@ export class WalletService {
 
     console.log(a);
   }
-  async sendMoneybyAddress(
-    userId: string,
-    receiverAddress: string,
-    money: number,
-  ) {
+  async sendMoneybyAddress(userId: string, receiverAddress: string, money: Uint256,) {
     const sender = await this.walletRepository.findOne({
       where: {
         userId: userId,
@@ -165,30 +160,44 @@ export class WalletService {
     });
     const receiver = await this.walletRepository.findOne({
       where: {
-        address: receiverAddress,
-      },
-    });
-    if (sender.userId === receiver.userId) {
-      return WalletStatus.SELF;
-    }
-    if (!sender || !receiver) {
-      return WalletStatus.NOT_FOUND;
-    }
-    const balance = await this.getBalance(sender.address);
-    if (balance < money) {
+        address: receiverAddress
+      }
+    })
+    console.log(123,receiver);
+    if(!receiver){
+      const balance = await this.getBalance(sender.address);
+    if (balance < Number(money)) {
       return WalletStatus.NOT_ENOUGH_FUND;
     }
     const privateKey = await this.checkPrivateKeyByID(userId);
     const checkTransaction = await this.transfer(
-      receiver.address,
-      Number(money),
+      receiverAddress,
+      money,
       privateKey,
     );
-    console.log(checkTransaction);
     if (!checkTransaction) {
       return TransactionStatus.FAIL;
     }
     return TransactionStatus.SUCCESS;
+    }else{
+      if (sender.userId == receiver.userId) {
+        return WalletStatus.SELF;
+      }
+      const balance = await this.getBalance(sender.address);
+      if (balance < Number(money)) {
+        return WalletStatus.NOT_ENOUGH_FUND;
+      }
+      const privateKey = await this.checkPrivateKeyByID(userId);
+      const checkTransaction = await this.transfer(
+        receiverAddress,
+        money,
+        privateKey,
+      );
+      if (!checkTransaction) {
+        return TransactionStatus.FAIL;
+      }
+      return TransactionStatus.SUCCESS;
+    }
   }
   async withdrawn(userId: string, money: number) {
     const user = await this.walletRepository.findOne({
@@ -275,5 +284,15 @@ export class WalletService {
       return WalletStatus.NOT_FOUND;
     }
     return checkUser.privateKey;
+  }
+  async checkAddressContract(addressToCheck: string) {
+    if (!/^(0x)?[0-9a-f]{40}$/i.test(addressToCheck)) {
+      console.log(fail);
+
+      return false;
+    }
+    console.log(true);
+
+    return true;
   }
 }

@@ -81,7 +81,7 @@ export class TelegramService {
 Hiện Tài khoản bạn đang có:<b> ${await this.wallerService.getUserNativeToken(checkUser.address)} PGX </b>
 Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}">tại đây!</a> 
 Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a> 
-` ,this.keyboardMarkup);
+` , this.keyboardMarkup);
     }
   }
   async handleMessage(msg: any) {
@@ -171,6 +171,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
   }
   //Action Handler
   async handleDepositAction(msg: any, options: any, data: DataCache) {
+    // Delete bot message but keep user message
     if (data.step === 1) {
       const Money = options.text;
       if (!Number(Money)) {
@@ -185,63 +186,68 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
         await this.cacheManager.del(options.userId);
         await msg.reply(`Vui lòng thực hiện lại`, this.keyboardMarkup);
       }
-      if (data.step === 2) {
-        await this.cacheManager.set(options.userId, data, 30000);
-        const addressWallet = await this.wallerService.getAddressById(
-          options.userId,
-        );
-        const address = await this.wallerService.checkAddress(options.userId);
-        const createTransaction = {
-          balance: String(data.money),
-          type: String(data.action),
-          senderAddress: address,
-          receiverAddress: address,
-          status: TransactionStatus.CREATED,
-        };
-        const transaction =
-          await this.transactionService.createTransaction(createTransaction);
-        await msg.reply(`processing...`);
-        if (data.money.toString().length > 65) {
-          await msg.reply(`Số tiền quá lớn`);
-          await this.transactionService.updateTransactionState(
-            TransactionStatus.FAIL,
-            transaction.id,
-          );
-          await this.cacheManager.del(options.userId);
-          await msg.reply('Tôi có thể giúp gì cho bạn', this.keyboardMarkup);
-          return;
-        }
-        const mint = await this.wallerService.mint(addressWallet, data.money);
+    }
+
+    if (data.step === 2) {
+      await this.cacheManager.set(options.userId, data, 30000);
+      const addressWallet = await this.wallerService.getAddressById(
+        options.userId,
+      );
+      const address = await this.wallerService.checkAddress(options.userId);
+      const createTransaction = {
+        balance: String(data.money),
+        type: String(data.action),
+        senderAddress: address,
+        receiverAddress: address,
+        status: TransactionStatus.CREATED,
+      };
+      const transaction =
+        await this.transactionService.createTransaction(createTransaction);
+      const { message_id } = await msg.sendMessage(`processing...`);
+      if (data.money.toString().length > 65) {
+        await msg.reply(`Số tiền quá lớn`);
+
         await this.transactionService.updateTransactionState(
-          TransactionStatus.PENDING,
+          TransactionStatus.FAIL,
           transaction.id,
         );
+        await this.cacheManager.del(options.userId);
+        await msg.reply('Tôi có thể giúp gì cho bạn', this.keyboardMarkup);
+        return;
+      }
+      const mint = await this.wallerService.mint(addressWallet, data.money);
+      await this.transactionService.updateTransactionState(
+        TransactionStatus.PENDING,
+        transaction.id,
+      );
 
-        if (!mint) {
-          await this.transactionService.updateTransactionState(
-            TransactionStatus.FAIL,
-            transaction.id,
-          );
-          await this.cacheManager.del(options.userId);
-          await msg.reply(`Nạp tiền thất bại`);
-          await msg.reply(
-            'Tôi có thể giúp gì tiếp cho bạn',
-            this.keyboardMarkup,
-          );
-          return;
-        } else {
-          await this.transactionService.updateTransactionState(
-            TransactionStatus.SUCCESS,
-            transaction.id,
-          );
-          await this.cacheManager.del(options.userId);
-          await msg.reply(`Nạp tiền thành công`);
-          await msg.reply(
-            'Tôi có thể giúp gì tiếp cho bạn',
-            this.keyboardMarkup,
-          );
-          return;
-        }
+      if (!mint) {
+        await this.transactionService.updateTransactionState(
+          TransactionStatus.FAIL,
+          transaction.id,
+        );
+        await this.cacheManager.del(options.userId);
+        await msg.reply(`Nạp tiền thất bại`);
+        await msg.reply(
+          'Tôi có thể giúp gì tiếp cho bạn',
+          this.keyboardMarkup,
+        );
+        return;
+      } else {
+        await this.transactionService.updateTransactionState(
+          TransactionStatus.SUCCESS,
+          transaction.id,
+        );
+        await this.cacheManager.del(options.userId);
+        await msg.deleteMessage(message_id)
+        await msg.deleteMessage(message_id-2)
+        await msg.deleteMessage(message_id-3)
+      await msg.reply(`Nạp tiền thành công`);
+        await msg.reply(
+          'Tôi có thể giúp gì tiếp cho bạn',
+          this.keyboardMarkup,
+        );
+        return;
       }
     }
   }
@@ -296,7 +302,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/">tại đây!</a>
           transaction.id,
         );
         await msg.reply(`processing....`);
-
         const burn = await this.wallerService.burn(data.money, privateKey);
         if (!burn) {
           await this.transactionService.updateTransactionState(

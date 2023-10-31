@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Context, Markup, Telegraf } from 'telegraf';
+import {
+  session, Markup, Telegraf, Context
+} from 'telegraf';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { TransactionService } from 'src/transaction/transaction.service';
@@ -15,12 +17,31 @@ interface DataCache {
   money: string;
   receiver?: string;
   sender?: string;
+  msg?: any[];
 }
+interface MyContext<U extends Update = Update> extends Context<U> {
+  session: {
+    count: number
+  },
+};
+
+import { format } from 'date-fns'
+import { Api } from "telegram/tl"
+import { TelegramClient } from "telegram";
+import { StringSession } from "telegram/sessions";
+import input from "input";
+import { botCommand } from 'src/constants/commands/telegram.commands';
+import { Update } from 'telegraf/typings/core/types/typegram';
 
 @Injectable()
 export class TelegramService {
-  private instance: any[] = [];
-  private bot: Telegraf;
+  // Create an array to store messages for each user
+  private messages: Map<number, string[]> = new Map();
+  private apiId = 28122207;
+  private apiHash = "bc03db1a7cbd350044d095a74410dfee";
+  private stringSession = new StringSession("1BQANOTEuMTA4LjU2LjE1MQG7f/fCUm/Eb1mEXkGR6p01XvpAaZDEdi/xCMG6cQmzSPoqnRiuGdlkT7okaa7toAM7ar6MQJpfjtrKcOEHI8ncNZbc9roSYjRi9REHKfuUOr+nlTl+Ywkwb7VOTkDgCc1m/gUuHpRsWVInpm8uRXqt3kELEujO+ydYXNPnDsVMlnE8LGp1Bsxxt6a5TbNpGkE5vhc8ExX4gKKMOO5Dar55q6Lx66/EjbENLU1gShcRalGzMGdqXQqret+joFKC+5wIfuSLEHetI+5jIyiMDMm6jIJT4GVdnFfZw1hTBzHN/ZuhYJKPudZ0mGjBFpBKxzsqMqY2LCgoHOyikxTV06KJ3Q==");
+  private bot = new Telegraf<MyContext>(this.configService.get('bot-token'));
+
   private keyboardMarkup = Markup.inlineKeyboard([
     [
       Markup.button.callback('Deposit', Button.DEPOSIT),
@@ -47,6 +68,7 @@ export class TelegramService {
       // Markup.button.callback('Search', Button.SEARCH),
     ],
     [Markup.button.callback('Cancel', Button.CANCEL)],
+
   ]);
   private keyTransferMethod = Markup.inlineKeyboard([
     [Markup.button.callback('Wallet address', Button.WALLET_ADDRESS)],
@@ -59,13 +81,31 @@ export class TelegramService {
     private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
-    this.bot = new Telegraf('6205015883:AAED1q2wQ_s1c99RCjSMzfMuBivzrLFxCoI');
+    this.bot.use(session({ defaultSession: () => ({ count: 0 }) }));
     this.bot.start(this.handleStart.bind(this));
     this.bot.on('text', this.handleMessage.bind(this));
     this.bot.action(/.*/, this.handleButton.bind(this));
+    this.bot.telegram.setMyCommands(botCommand);
     this.bot.launch();
   }
 
+  async loginToTelegram() {
+    const client = new TelegramClient(this.stringSession, this.apiId, this.apiHash, {
+      connectionRetries: 5,
+    });
+    await client.start({
+      phoneNumber: async () => await input.text("Please enter your number: "),
+      password: async () => await input.text("Please enter your password: "),
+      phoneCode: async () =>
+        await input.text("Please enter the code you received: "),
+      onError: (err) =>
+
+        console.log(err),
+    });
+    console.log("connected to telegram api server");
+    console.log(client.session.save()); // Save this string to avoid logging in again
+    return client;
+  }
   async handleStart(ctx: any) {
     const options = {
       userId: ctx.update.message.from.id,
@@ -86,27 +126,43 @@ Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
 Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
 Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a> 
 ` , this.keyboardMarkup);
-ctx.answer_callback_query()
-      this.instance.push(message)
-      const length = this.instance.length;
-      if (this.instance.length > 1) {
-        this.instance.reverse();
-        this.deleteBotMessage(this.instance[length - 1], 0);
-        this.instance.pop();
+      try {
+        const userMessages = this.messages.get(options.userId) || [];
+        console.log(userMessages.length);
+        userMessages.push(message);
+        if (userMessages.length > 1) {
+          userMessages.reverse();
+          await this.deleteBotMessage(userMessages[1], 0);
+          userMessages.pop();
+        }
+        this.messages.set(options.userId, userMessages);
       }
-
+      catch (err) {
+        console.log('error here');
+      }
     }
   }
+
   async handleMessage(msg: any) {
     const options = {
       userId: msg.update.message.from.id,
       username: msg.update.message.from.first_name,
       text: msg.update.message.text,
     };
+
     const data: DataCache = await this.cacheManager.get(options.userId);
     if (!data) {
-      const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
-      return this.deleteBotMessage(finalMessage, 1000)
+      switch (options.text) {
+        case '/clear':
+          return await this.deleteHistory(msg);
+        case '/info':
+          return await msg.reply('havent implemented')
+        case '/help':
+          return await msg.reply('havent implemented')
+        default:
+          const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
+          return this.deleteBotMessage(finalMessage, 1000)
+      }
     }
     switch (data.action) {
       case Action.DEPOSIT:
@@ -377,7 +433,7 @@ ctx.answer_callback_query()
           // this.deleteBotMessage(finalMessage, 10000)
         }
         const message = msg.replyWithHTML(`Bạn đang xem <b>${selectHistory.length} giao dịch </b>`, this.handleStart(msg));
-    //    messages.push(message);
+        //    messages.push(message);
         await this.cacheManager.del(options.userId);
         for (const message of messages) {
           this.deleteBotMessage(message, 30000);
@@ -699,10 +755,30 @@ ctx.answer_callback_query()
   async deleteBotMessage(message: any, delay: number) {
     const chatId = message.chat.id;
     const messageId = message.message_id;
-    const token = this.configService.get('bot-token'); // Thay thế YOUR_TELEGRAM_BOT_TOKEN bằng mã thông báo bot của bạn
-    setTimeout(async () => {
-      const bot = new Telegraf(token);
-      await bot.telegram.deleteMessage(chatId, messageId);
+    setTimeout(() => {
+      (async () => {
+        await this.bot.telegram.deleteMessage(chatId, messageId);
+      })();
     }, delay);
   }
+
+  async deleteHistory(msg: any) {
+    const userId = msg.update.message.from.id
+    this.messages.delete(userId);
+    await this.cacheManager.del(userId);
+    const client = await this.loginToTelegram();
+    const result = await client.invoke(
+      new Api.messages.DeleteHistory({
+        peer: this.configService.get('bot-url'),
+        maxId: 0,
+        justClear: true,
+        revoke: true,
+        minDate: 43,
+      })
+    );
+    msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`);
+    //console.log(result); // prints the result
+  }
+
 }
+

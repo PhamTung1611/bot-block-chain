@@ -2,7 +2,7 @@ export const botCommand = [
 
     {
         command: 'clear',
-        description: 'clear history',
+        description: 'clear history (using for development delete later)',
     },
 
     {
@@ -16,6 +16,9 @@ export const botCommand = [
     {
         command: 'help',
         description: 'help action',
+    },
+    {
+        command: 'cancel',
+        description: 'cancel action',
     }
-
 ]

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  session, Markup, Telegraf, Context
+  session, Markup, Telegraf
 } from 'telegraf';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
@@ -19,28 +19,22 @@ interface DataCache {
   sender?: string;
   msg?: any[];
 }
-interface MyContext<U extends Update = Update> extends Context<U> {
-  session: {
-    count: number
-  },
-};
-
 import { format } from 'date-fns'
 import { Api } from "telegram/tl"
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input";
 import { botCommand } from 'src/constants/commands/telegram.commands';
-import { Update } from 'telegraf/typings/core/types/typegram';
 
 @Injectable()
 export class TelegramService {
   // Create an array to store messages for each user
   private messages: Map<number, string[]> = new Map();
-  private apiId = 28122207;
-  private apiHash = "bc03db1a7cbd350044d095a74410dfee";
-  private stringSession = new StringSession("1BQANOTEuMTA4LjU2LjE1MQG7f/fCUm/Eb1mEXkGR6p01XvpAaZDEdi/xCMG6cQmzSPoqnRiuGdlkT7okaa7toAM7ar6MQJpfjtrKcOEHI8ncNZbc9roSYjRi9REHKfuUOr+nlTl+Ywkwb7VOTkDgCc1m/gUuHpRsWVInpm8uRXqt3kELEujO+ydYXNPnDsVMlnE8LGp1Bsxxt6a5TbNpGkE5vhc8ExX4gKKMOO5Dar55q6Lx66/EjbENLU1gShcRalGzMGdqXQqret+joFKC+5wIfuSLEHetI+5jIyiMDMm6jIJT4GVdnFfZw1hTBzHN/ZuhYJKPudZ0mGjBFpBKxzsqMqY2LCgoHOyikxTV06KJ3Q==");
-  private bot = new Telegraf<MyContext>(this.configService.get('bot-token'));
+  private apiId = Number(this.configService.get('api_id'));
+  private apiHash = this.configService.get('api_hash');
+  private stringSession = new StringSession(this.configService.get('string_session'));
+  //connect to Telegram bot
+  private bot = new Telegraf(this.configService.get('bot_token'));
 
   private keyboardMarkup = Markup.inlineKeyboard([
     [
@@ -61,15 +55,7 @@ export class TelegramService {
     [Markup.button.callback('CreateAccount', Button.CREATE)],
   ]);
 
-  private keyTransactionService = Markup.inlineKeyboard([
-    [
-      Markup.button.callback('Transfer Money', Button.TRANSFER),
-      Markup.button.callback('Transaction History', Button.HISTORY),
-      // Markup.button.callback('Search', Button.SEARCH),
-    ],
-    [Markup.button.callback('Cancel', Button.CANCEL)],
 
-  ]);
   private keyTransferMethod = Markup.inlineKeyboard([
     [Markup.button.callback('Wallet address', Button.WALLET_ADDRESS)],
     [Markup.button.callback('Cancel', Button.CANCEL)],
@@ -89,7 +75,7 @@ export class TelegramService {
     this.bot.launch();
   }
 
-  async loginToTelegram() {
+  async telegramClient() {
     const client = new TelegramClient(this.stringSession, this.apiId, this.apiHash, {
       connectionRetries: 5,
     });
@@ -102,8 +88,8 @@ export class TelegramService {
 
         console.log(err),
     });
-    console.log("connected to telegram api server");
-    console.log(client.session.save()); // Save this string to avoid logging in again
+    //  console.log("connected to telegram client");
+    //  console.log(client.session.save()); // Save this string to avoid logging in again
     return client;
   }
   async handleStart(ctx: any) {
@@ -126,20 +112,15 @@ Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
 Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
 Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a> 
 ` , this.keyboardMarkup);
-      try {
-        const userMessages = this.messages.get(options.userId) || [];
-        console.log(userMessages.length);
-        userMessages.push(message);
-        if (userMessages.length > 1) {
-          userMessages.reverse();
-          await this.deleteBotMessage(userMessages[1], 0);
-          userMessages.pop();
-        }
-        this.messages.set(options.userId, userMessages);
+      const userMessages = this.messages.get(options.userId) || [];
+      userMessages.push(message);
+      if (userMessages.length > 1) {
+        userMessages.reverse();
+        await this.deleteBotMessage(userMessages[1], 0);
+        userMessages.pop();
+        console.log(`Delete start instance of user ${options.userId}`);
       }
-      catch (err) {
-        console.log('error here');
-      }
+      this.messages.set(options.userId, userMessages);
     }
   }
 
@@ -154,14 +135,18 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
     if (!data) {
       switch (options.text) {
         case '/clear':
-          return await this.deleteHistory(msg);
+          try {
+            return await this.deleteHistory(msg);
+          } catch (err) {
+            return await msg.reply('some thing went wrong');
+          }
         case '/info':
           return await msg.reply('havent implemented')
         case '/help':
           return await msg.reply('havent implemented')
         default:
           const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
-          return this.deleteBotMessage(finalMessage, 1000)
+          return this.deleteBotMessage(finalMessage, 5000)
       }
     }
     switch (data.action) {
@@ -180,6 +165,16 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       case Action.SEND_MONEY_ADDRESS:
         await this.handleSendMoneyAction(msg, options, data);
         break;
+      case '/clear':
+        try {
+          return await this.deleteHistory(msg);
+        } catch (err) {
+          return await msg.reply('some thing went wrong');
+        }
+      case '/info':
+        return await msg.reply('havent implemented')
+      case '/help':
+        return await msg.reply('havent implemented')
       default:
         await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
         break;
@@ -210,9 +205,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         break;
       case Button.INFORMATION:
         await this.handleInformationButton(msg, options, data, checkUser);
-        break;
-      case Button.TRANSACTION:
-        await this.handleTransactionButton(msg, options, data, checkUser);
         break;
       case Button.WALLET_ADDRESS:
         await this.handleWalletAddressButton(msg, options, data, checkUser);
@@ -698,22 +690,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
     this.deleteBotMessage(finalMessage, 30000)
     await this.cacheManager.del(options.userId);
   }
-  async handleTransactionButton(
-    msg: any,
-    options: any,
-    data: any,
-    checkUser: any,
-  ) {
-    if (!checkUser) {
-      return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
-    }
-    if (data.action !== '') {
-      await msg.reply(`Canceling ${data.action}`);
-      await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.TRANSACTION, 1);
-    }
-    await msg.reply('Phương thức chuyển tiền:', this.keyTransactionService);
-  }
   async handleWalletAddressButton(
     msg: any,
     options: any,
@@ -763,21 +739,26 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
   }
 
   async deleteHistory(msg: any) {
-    const userId = msg.update.message.from.id
-    this.messages.delete(userId);
-    await this.cacheManager.del(userId);
-    const client = await this.loginToTelegram();
-    const result = await client.invoke(
-      new Api.messages.DeleteHistory({
-        peer: this.configService.get('bot-url'),
-        maxId: 0,
-        justClear: true,
-        revoke: true,
-        minDate: 43,
-      })
-    );
-    msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`);
-    //console.log(result); // prints the result
+    const userId = msg.update.message.from.id;
+    try {
+      this.messages.delete(userId);
+      await this.cacheManager.del(userId);
+      const client = await this.telegramClient();
+      await client.invoke(
+        new Api.messages.DeleteHistory({
+          peer: this.configService.get('bot_url'),
+          maxId: 0,
+          justClear: true,
+          revoke: true,
+          minDate: 43,
+        })
+      )
+      await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`);
+    }
+    catch (err) {
+      console.error(err);
+      await msg.reply(`Some thing went wrong`);
+    }
   }
 
 }

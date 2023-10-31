@@ -287,12 +287,8 @@ export class WalletService {
   }
   async checkAddressContract(addressToCheck: string) {
     if (!/^(0x)?[0-9a-f]{40}$/i.test(addressToCheck)) {
-      console.log(fail);
-
       return false;
     }
-    console.log(true);
-
     return true;
   }
 }

@@ -25,11 +25,13 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input";
 import { botCommand } from 'src/constants/commands/telegram.commands';
+import { sleep } from 'telegram/Helpers';
 
 @Injectable()
 export class TelegramService {
   // Create an array to store messages for each user
-  private messages: Map<number, string[]> = new Map();
+  private startInstances: Map<number, string[]> = new Map();
+  private processMessages: Map<number, string> = new Map();
   private apiId = Number(this.configService.get('api_id'));
   private apiHash = this.configService.get('api_hash');
   private stringSession = new StringSession(this.configService.get('string_session'));
@@ -60,7 +62,7 @@ export class TelegramService {
 
   constructor(
     private transactionService: TransactionService,
-    private wallerService: WalletService,
+    private walletService: WalletService,
     private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
@@ -72,29 +74,12 @@ export class TelegramService {
     this.bot.launch();
   }
 
-  async telegramClient() {
-    const client = new TelegramClient(this.stringSession, this.apiId, this.apiHash, {
-      connectionRetries: 5,
-    });
-    await client.start({
-      phoneNumber: async () => await input.text("Please enter your number: "),
-      password: async () => await input.text("Please enter your password: "),
-      phoneCode: async () =>
-        await input.text("Please enter the code you received: "),
-      onError: (err) =>
-
-        console.log(err),
-    });
-    //  console.log("connected to telegram client");
-    //  console.log(client.session.save()); // Save this string to avoid logging in again
-    return client;
-  }
   async handleStart(ctx: any) {
     const options = {
       userId: ctx.update.message.from.id,
       username: ctx.update.message.from.first_name,
     };
-    const checkUser = await this.wallerService.findOneUser(options.userId);
+    const checkUser = await this.walletService.findOneUser(options.userId);
 
     if (!checkUser) {
       await ctx.replyWithHTML(
@@ -102,22 +87,22 @@ export class TelegramService {
         this.keyCreateAccount,
       );
     } else {
-      const nativeToken = await this.wallerService.getUserNativeToken(checkUser.address)
+      const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`
     Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>\nĐây là địa chỉ ví của bạn!\n<code>${checkUser.address}</code>\n
 Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
 Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
 Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a> 
 ` , this.keyboardMarkup);
-      const userMessages = this.messages.get(options.userId) || [];
-      userMessages.push(message);
-      if (userMessages.length > 1) {
-        userMessages.reverse();
-        await this.deleteBotMessage(userMessages[1], 0);
-        userMessages.pop();
+      const startInstances = this.startInstances.get(options.userId) || [];
+      startInstances.push(message);
+      if (startInstances.length > 1) {
+        startInstances.reverse();
+        await this.deleteBotMessage(startInstances[1], 0);
+        startInstances.pop();
         console.log(`Delete start instance of user ${options.userId}`);
       }
-      this.messages.set(options.userId, userMessages);
+      this.startInstances.set(options.userId, startInstances);
     }
   }
 
@@ -127,24 +112,37 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       username: msg.update.message.from.first_name,
       text: msg.update.message.text,
     };
-
     const data: DataCache = await this.cacheManager.get(options.userId);
-    if (!data) {
-      switch (options.text) {
-        case '/clear':
-          try {
-            return await this.deleteHistory(msg);
-          } catch (err) {
-            return await msg.reply('some thing went wrong');
-          }
-        case '/info':
-          return await msg.reply('havent implemented')
-        case '/help':
-          return await msg.reply('havent implemented')
-        default:
-          const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
-          return this.deleteBotMessage(finalMessage, 5000)
-      }
+    if (data) {
+      return await this.handleUserAction(msg, options, data);
+    }
+    return await this.handleUserCommands(msg, options.text);
+
+  }
+  async handleUserCommands(msg: any, text: any) {
+    switch (text) {
+      case '/clear':
+        try {
+          return await this.deleteHistory(msg);
+        } catch (err) {
+          return await msg.reply('some thing went wrong');
+        }
+      case '/info':
+        return await msg.reply('havent implemented');
+      case '/help':
+        return await msg.reply('havent implemented');
+      default:
+        const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
+        return this.deleteBotMessage(finalMessage, 5000);
+    }
+  }
+
+  async handleUserAction(msg: any, options: any, data: DataCache) {
+    if (options.text === '/cancel') {
+      this.cacheManager.del(options.userId);
+      const message = await msg.reply('Action Cancelled', this.handleStart(msg));
+      this.deleteBotMessage(message, 3000);
+      return;
     }
     switch (data.action) {
       case Action.DEPOSIT:
@@ -167,7 +165,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         break;
     }
   }
-
   async handleButton(msg: any) {
     const options = {
       userId: msg.update.callback_query.from.id,
@@ -179,7 +176,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       step: 1,
       money: '',
     };
-    const checkUser = await this.wallerService.findOneUser(options.userId);
+    const checkUser = await this.walletService.findOneUser(options.userId);
     switch (options.data) {
       case Button.CREATE:
         await this.handleCreateAccountButton(msg, options, data, checkUser);
@@ -216,89 +213,97 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
     }
   }
   //Action Handler
-  async handleDepositAction(msg: any, options: any, data: DataCache) {
-    const messages = [];
+  async handleDepositAction(
+    msg: any,
+    options: any,
+    data: DataCache
+  ): Promise<void> {
     if (data.step === 1) {
-      const Money = options.text;
-      if (!Number(Money)) {
-        await this.cacheManager.del(options.userId);
-        const message = await msg.reply('Vui lòng thực hiện lại');
-        //this.deleteBotMessage(finalMessage, 1000)
-        messages.push(message);
+      const isValidAmount = await this.validateDepositAmount(options, data, msg);
+      if (!isValidAmount) {
+        return;
       }
-      if (Number(Money) && Number(Money) > 0) {
-        data.money = options.text;
-        data.step = 2;
-        await this.cacheManager.set(options.userId, data, 30000);
-      } else {
-        await this.cacheManager.del(options.userId);
-        const message = await msg.reply(`Vui lòng thực hiện lại`);
-        // this.deleteBotMessage(finalMessage, 1000)
-        messages.push(message);
-      }
-      if (data.step === 2) {
-        await this.cacheManager.set(options.userId, data, 30000);
-        const addressWallet = await this.wallerService.getAddressById(
-          options.userId,
-        );
-        const address = await this.wallerService.checkAddress(options.userId);
-        const createTransaction = {
-          balance: String(data.money),
-          type: String(data.action),
-          senderAddress: address,
-          receiverAddress: address,
-          status: TransactionStatus.CREATED,
-        };
-        const transaction =
-          await this.transactionService.createTransaction(createTransaction);
-        const message = await msg.reply(`processing...`);
-        messages.push(message);
-        // this.deleteBotMessage(finalMessage, 2000)
-        if (data.money.toString().length > 65) {
-          const message = await msg.reply(`Số tiền quá lớn`);
-          messages.push(message);
-          // this.deleteBotMessage(finalMessage, 1000)
-          await this.transactionService.updateTransactionState(
-            TransactionStatus.FAIL,
-            transaction.id,
-          );
-          await this.cacheManager.del(options.userId);
-          return;
-        }
-        const mint = await this.wallerService.mint(addressWallet, data.money);
-        await this.transactionService.updateTransactionState(
-          TransactionStatus.PENDING,
-          transaction.id,
-        );
-
-        if (!mint) {
-          await this.transactionService.updateTransactionState(
-            TransactionStatus.FAIL,
-            transaction.id,
-          );
-          await this.cacheManager.del(options.userId);
-          const message = await msg.reply(`Nạp tiền thất bại`);
-          messages.push(message);
-          //this.deleteBotMessage(finalMessage, 1000)
-          return;
-        } else {
-          await this.transactionService.updateTransactionState(
-            TransactionStatus.SUCCESS,
-            transaction.id,
-          );
-          await this.cacheManager.del(options.userId);
-          const message = await msg.reply(`Nạp tiền thành công`, this.handleStart(msg));
-          messages.push(message);
-          console.log(messages);
-          for (const message of messages) {
-            this.deleteBotMessage(message, 3000);
-          }
-          //this.deleteBotMessage(finalMessage, 1000)
-          return;
-        }
+    }
+    if (data.step === 2) {
+      const mintSuccess = await this.mint(options, data, msg);
+      if (!mintSuccess) {
+        return;
       }
     }
   }
+
+  async validateDepositAmount(
+    options: any,
+    data: DataCache,
+    msg: any,
+  ): Promise<boolean> {
+    if (!Number(options.text)) {
+      const message = await msg.reply("Số tiền sai cú pháp, Vui lòng nhập lại! Để hủy thao tác nhập lệnh /cancel");
+      this.deleteBotMessage(message, 3000);
+      return false;
+    }
+    if (Number(options.text) && Number(options.text) > 0) {
+      data.money = options.text;
+      data.step = 2;
+      return true;
+    }
+    await this.cacheManager.del(options.userId);
+    const message = await msg.reply("Vui lòng thực hiện lại");
+    this.deleteBotMessage(message, 3000);
+    return false;
+  }
+
+  async createDepositTransaction(
+    options: any,
+    data: DataCache,
+    msg: any
+  ): Promise<any> {
+    const address = await this.walletService.checkAddress(options.userId);
+    const createTransaction = {
+      balance: String(data.money),
+      type: String(data.action),
+      senderAddress: address,
+      receiverAddress: address,
+      status: TransactionStatus.CREATED,
+    };
+    const transaction = await this.transactionService.createTransaction(createTransaction);
+    const message = await msg.reply("processing...");
+    this.processMessages.set(options.userId, message)
+    return transaction;
+  }
+
+  async mint(
+    options: any,
+    data: DataCache,
+    msg: any
+  ): Promise<boolean> {
+    const transaction = await this.createDepositTransaction(options, data, msg);
+    await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
+    const mint = await this.walletService.mint(transaction.senderAddress, data.money);
+    if (!mint) {
+      await this.transactionService.updateTransactionState(TransactionStatus.FAIL, transaction.id);
+      const message = await msg.reply(`Nạp tiền thất bại`)
+      const process = this.processMessages.get(options.userId)
+      this.deleteBotMessage(process, 3000);
+      this.deleteBotMessage(message, 3000);
+
+      return false;
+    } else {
+      await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
+      const message = await msg.reply(`Nạp tiền thành công`);
+      const process = this.processMessages.get(options.userId)
+      this.cacheManager.del(options.userId);
+      console.log(process);
+      this.deleteBotMessage(process, 3000);
+      this.deleteBotMessage(message, 3000);
+      await sleep(2000);
+      await msg.reply(`tôi có thể giúp gì tiếp cho bạn`, this.handleStart(msg));
+      return true;
+    }
+  }
+
+
+
   async handleWithDrawAction(msg: any, options: any, data: DataCache) {
     const messages = [];
     if (data.step === 1) {
@@ -307,7 +312,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         await this.cacheManager.del(options.userId);
         const message = await msg.reply('Vui lòng thực hiện lại');
         messages.push(message);
-        //this.deleteBotMessage(finalMessage, 1000)
       }
       if (Number(Money) && Number(Money) > 0) {
         data.money = options.text;
@@ -316,13 +320,12 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       } else {
         const message = await msg.reply(`Rút tiền thất bại, vui lòng thử lại`);
         messages.push(message);
-        // this.deleteBotMessage(finalMessage, 1000)
         await this.cacheManager.del(options.userId);
       }
       if (data.step === 2) {
         await this.cacheManager.set(options.userId, data, 30000);
 
-        const address = await this.wallerService.checkAddress(options.userId);
+        const address = await this.walletService.checkAddress(options.userId);
         const createTransaction = {
           balance: String(data.money),
           type: String(data.action),
@@ -332,19 +335,18 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         };
         const transaction =
           await this.transactionService.createTransaction(createTransaction);
-        const balance = await this.wallerService.getBalance(address);
+        const balance = await this.walletService.getBalance(address);
         if (Number(balance) < Number(data.money)) {
           await this.cacheManager.del(options.userId);
           const message = await msg.reply(`Tài khoản không đủ tiền`);
           messages.push(message);
-          //this.deleteBotMessage(finalMessage, 1000)
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
             transaction.id,
           );
           return;
         }
-        const privateKey = await this.wallerService.checkPrivateKeyByID(
+        const privateKey = await this.walletService.checkPrivateKeyByID(
           options.userId,
         );
         await this.transactionService.updateTransactionState(
@@ -353,9 +355,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         );
         const message = await msg.reply(`processing....`);
         messages.push(message);
-        //   this.deleteBotMessage(finalMessage, 3000)
-
-        const burn = await this.wallerService.burn(data.money, privateKey);
+        const burn = await this.walletService.burn(data.money, privateKey);
         if (!burn) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
@@ -363,7 +363,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
           );
           const message = await msg.reply(`Rút tiền thất bại`);
           messages.push(message);
-          // this.deleteBotMessage(finalMessage, 1000)
           return;
         }
         await this.transactionService.updateTransactionState(
@@ -373,7 +372,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         await this.cacheManager.del(options.userId);
         const message1 = await msg.reply(`Rút tiền thành công`, this.handleStart(msg));
         messages.push(message1);
-        // this.deleteBotMessage(finalMess, 1000)
         for (const message of messages) {
           this.deleteBotMessage(message, 3000);
         }
@@ -381,9 +379,10 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       }
     }
   }
+
   async handleHistoryAction(msg: any, options: any, data: DataCache) {
     const messages = [];
-    const address = await this.wallerService.checkAddress(options.userId);
+    const address = await this.walletService.checkAddress(options.userId);
 
     const listHistory = await this.transactionService.getListHistory(address);
     if (data.step === 1) {
@@ -392,13 +391,11 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         await this.cacheManager.del(options.userId);
         const message = await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
         messages.push(message);
-        //return this.deleteBotMessage(finalMessage, 1000)
       } else if (Number(listHistory) < Number(amountHistory)) {
         await this.cacheManager.del(options.userId);
         const message = await msg.reply(
           `Xin lỗi bạn chỉ có ${listHistory} giao dịch thôi`);
         messages.push(message);
-        // this.deleteBotMessage(finalMessage, 1000)
       } else {
         const selectHistory = await this.transactionService.getAmountHistory(
           Number(amountHistory),
@@ -409,10 +406,8 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
             `Mã giao dịch:\n ${item?.id}\nSố tiền: ${item?.balance}\nKiểu: ${item?.type}\nTài khoản nguồn: ${item.senderAddress}\nTài khoản nhận: ${item.receiverAddress}\n Trạng thái: ${item.status}`,
           );
           messages.push(message);
-          // this.deleteBotMessage(finalMessage, 10000)
         }
         const message = msg.replyWithHTML(`Bạn đang xem <b>${selectHistory.length} giao dịch </b>`, this.handleStart(msg));
-        //    messages.push(message);
         await this.cacheManager.del(options.userId);
         for (const message of messages) {
           this.deleteBotMessage(message, 30000);
@@ -426,7 +421,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       const address = options.text;
       data.step = 2;
       const checkAddress =
-        await this.wallerService.checkAddressContract(address);
+        await this.walletService.checkAddressContract(address);
       if (!checkAddress) {
         await msg.reply(`Địa chỉ người dùng không tồn tại`);
         await this.cacheManager.del(options.userId);
@@ -463,7 +458,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         await this.cacheManager.set(options.userId, data, 30000);
       }
       const receiver = data.receiver;
-      const sender = await this.wallerService.getAddressById(options.userId);
+      const sender = await this.walletService.getAddressById(options.userId);
       const createTransaction = {
         balance: String(data.money),
         type: Action.SEND_MONEY_ADDRESS,
@@ -475,9 +470,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         await this.transactionService.createTransaction(createTransaction);
       const message = await msg.reply(`processing...`);
       messages.push(message);
-      // this.deleteBotMessage(finalMessage, 1000)
-
-      const checkStatus = await this.wallerService.sendMoneybyAddress(
+      const checkStatus = await this.walletService.sendMoneybyAddress(
         options.userId,
         receiver,
         money,
@@ -493,7 +486,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         );
         const message = await msg.reply(`Chuyển tiền thành công`, this.handleStart(msg));
         messages.push(message);
-        // this.deleteBotMessage(finalMessage, 1000)
+
         data.step = 1;
         data.action = '';
       } else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {
@@ -502,20 +495,16 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
           this.handleStart(msg),
         );
         messages.push(message);
-        //this.deleteBotMessage(finalMessage, 1000)
         this.cacheManager.del(options.userId);
       } else if (checkStatus === WalletStatus.SELF) {
         const message = await msg.reply(
           `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`, this.handleStart(msg)
         );
         messages.push(message);
-        //this.deleteBotMessage(finalMessage, 2000)
-
         this.cacheManager.del(options.userId);
       } else {
         const message = await msg.reply(`Chuyển tiền thất bại`, this.handleStart(msg));
         messages.push(message);
-        // this.deleteBotMessage(finalMessage, 1000)
         await this.transactionService.updateTransactionState(
           TransactionStatus.FAIL,
           transaction.id,
@@ -546,13 +535,13 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
   ) {
     if (data.action === '') {
       if (!checkUser) {
-        const wallet = await this.wallerService.generateNewWallet();
+        const wallet = await this.walletService.generateNewWallet();
         const user = {
           userId: msg.chat.id,
           username: msg.chat.first_name,
         };
         await msg.reply(`Tạo tài khoản cho user ${user.userId}`);
-        const data = await this.wallerService.createWallet(
+        const data = await this.walletService.createWallet(
           {
             ...wallet,
             ...user,
@@ -633,7 +622,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    const address = await this.wallerService.checkAddress(options.userId);
+    const address = await this.walletService.checkAddress(options.userId);
 
     const listHistory = await this.transactionService.getListHistory(address);
     if (Number(listHistory) === 0) {
@@ -670,9 +659,9 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.INFORMATION, 1);
     }
-    // const info = await this.wallerService.checkInformation(options.userId);
-    const add = await this.wallerService.getAddressById(options.userId);
-    const balane = await this.wallerService.getBalance(add);
+    // const info = await this.walletService.checkInformation(options.userId);
+    const add = await this.walletService.getAddressById(options.userId);
+    const balane = await this.walletService.getBalance(add);
     const finalMessage = await msg.replyWithHTML(`Balance:${balane} <b>HUSD</b>`);
     this.deleteBotMessage(finalMessage, 30000)
     await this.cacheManager.del(options.userId);
@@ -724,11 +713,27 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       })();
     }, delay);
   }
+  async telegramClient() {
+    const client = new TelegramClient(this.stringSession, this.apiId, this.apiHash, {
+      connectionRetries: 5,
+    });
+    await client.start({
+      phoneNumber: async () => await input.text("Please enter your number: "),
+      password: async () => await input.text("Please enter your password: "),
+      phoneCode: async () =>
+        await input.text("Please enter the code you received: "),
+      onError: (err) =>
 
+        console.log(err),
+    });
+    //  console.log("connected to telegram client");
+    //  console.log(client.session.save()); // Save this string to avoid logging in again
+    return client;
+  }
   async deleteHistory(msg: any) {
     const userId = msg.update.message.from.id;
     try {
-      this.messages.delete(userId);
+      this.startInstances.delete(userId);
       await this.cacheManager.del(userId);
       const client = await this.telegramClient();
       await client.invoke(

@@ -1,5 +1,4 @@
 export const botCommand = [
-
     {
         command: 'clear',
         description: 'clear history (using for development delete later)',

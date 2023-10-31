@@ -7,12 +7,15 @@ import { Contract, ethers, Wallet } from 'ethers';
 import { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
-import { abiChain } from 'src/constants/abis/husd.abi';
+import { HUSD } from 'src/constants/abis/husd.abi';
+import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
+import { Mentos } from 'src/constants/abis/mentos.abi';
 
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
-  private readonly contractAddress: string;
+  private contractAddress: string;
+  private abi: any;
   private readonly adminWallet: any;
   constructor(
     @InjectRepository(WalletEntity)
@@ -21,12 +24,31 @@ export class WalletService {
   ) {
     this.provider = new ethers.JsonRpcProvider(configService.get('RPC'));
     this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09';
+    this.abi = HUSD;
     this.adminWallet = new Wallet(
       configService.get('adminPrivateKey'),
       this.provider,
     );
   }
-
+  async changeToken(token: string) {
+    let coin: string;
+    switch (token) {
+      case 'HUSD':
+        this.contractAddress = HUSDContractAddress.address.toString();
+        coin = HUSDContractAddress.token.toString();
+        this.abi = HUSD;
+        break;
+      case 'MTS':
+        this.contractAddress = MentosContractAddress.address.toString();
+        coin = MentosContractAddress.token.toString();
+        this.abi = Mentos;
+        break;
+      default:
+        return false;
+    }
+    console.log('current using ' + coin);
+    console.log('contract address ' + this.contractAddress);
+  }
   async createWallet(jsonData: any, address: string) {
     await this.sendToken(address);
     const wallet = this.walletRepository.create(jsonData);
@@ -51,7 +73,7 @@ export class WalletService {
       this.configService.get('adminPrivateKey'),
       this.provider,
     );
-    const contract = new Contract(this.contractAddress, abiChain, sourceWallet);
+    const contract = new Contract(this.contractAddress, this.abi, sourceWallet);
     const txResponse = await contract.mint(
       address,
       this.convertToEther(Number(amount)),
@@ -63,31 +85,39 @@ export class WalletService {
       return false;
     }
   }
- async getUserNativeToken(address: string){
-  return  ethers.formatUnits(await this.provider.getBalance(address))
- }
+  async getUserNativeToken(address: string) {
+    return ethers.formatUnits(await this.provider.getBalance(address))
+  }
   async addAuthorizedOwner(newOwner: string) {
     const adminWallet = this.adminWallet;
-    const contract = new Contract(this.contractAddress, abiChain, adminWallet);
+    const contract = new Contract(this.contractAddress, this.abi, adminWallet);
     const tx = await contract.addAuthorizedOwner(newOwner);
     await tx.wait();
   }
   async getBalance(address: string) {
     const contract = new ethers.Contract(
       this.contractAddress,
-      abiChain,
+      this.abi,
       this.provider,
     );
     const balance = await contract.balanceOf(address);
     return Number(ethers.formatEther(balance));
   }
-
+  async getTokenSymbol() {
+    const contract = new ethers.Contract(
+      this.contractAddress,
+      this.abi,
+      this.provider,
+    );
+    const symbol =await contract.symbol();
+    return symbol;
+  }
   async burn(amount: Uint256, privateKey: string) {
     try {
       const sourceWallet = new Wallet(privateKey, this.provider);
       const contract = new Contract(
         this.contractAddress,
-        abiChain,
+        this.abi,
         sourceWallet,
       );
       const tx = await contract.burn(this.convertToEther(Number(amount)));
@@ -103,7 +133,7 @@ export class WalletService {
       const sourceWallet = new Wallet(privateKey, this.provider);
       const contract = new Contract(
         this.contractAddress,
-        abiChain,
+        this.abi,
         sourceWallet,
       );
       const tx = await contract.transfer(
@@ -143,7 +173,7 @@ export class WalletService {
   async deposit(toAddress: string, amount: number) {
     const contract = new ethers.Contract(
       this.contractAddress,
-      abiChain,
+      this.abi,
       this.adminWallet,
     );
     const tx = await contract.mint(toAddress, amount);
@@ -163,23 +193,23 @@ export class WalletService {
         address: receiverAddress
       }
     })
-    console.log(123,receiver);
-    if(!receiver){
+    console.log(123, receiver);
+    if (!receiver) {
       const balance = await this.getBalance(sender.address);
-    if (balance < Number(money)) {
-      return WalletStatus.NOT_ENOUGH_FUND;
-    }
-    const privateKey = await this.checkPrivateKeyByID(userId);
-    const checkTransaction = await this.transfer(
-      receiverAddress,
-      money,
-      privateKey,
-    );
-    if (!checkTransaction) {
-      return TransactionStatus.FAIL;
-    }
-    return TransactionStatus.SUCCESS;
-    }else{
+      if (balance < Number(money)) {
+        return WalletStatus.NOT_ENOUGH_FUND;
+      }
+      const privateKey = await this.checkPrivateKeyByID(userId);
+      const checkTransaction = await this.transfer(
+        receiverAddress,
+        money,
+        privateKey,
+      );
+      if (!checkTransaction) {
+        return TransactionStatus.FAIL;
+      }
+      return TransactionStatus.SUCCESS;
+    } else {
       if (sender.userId == receiver.userId) {
         return WalletStatus.SELF;
       }

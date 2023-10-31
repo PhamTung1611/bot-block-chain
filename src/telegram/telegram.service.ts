@@ -53,7 +53,11 @@ export class TelegramService {
   private keyCreateAccount = Markup.inlineKeyboard([
     [Markup.button.callback('CreateAccount', Button.CREATE)],
   ]);
+  private tokens = Markup.inlineKeyboard([
+    [Markup.button.callback('HUSD', Button.HUSD),
+    Markup.button.callback('MTS', Button.MTS)],
 
+  ]);
 
   private keyTransferMethod = Markup.inlineKeyboard([
     [Markup.button.callback('Wallet address', Button.WALLET_ADDRESS)],
@@ -88,12 +92,10 @@ export class TelegramService {
       );
     } else {
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
-      const message = await ctx.replyWithHTML(`
-    Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>\nĐây là địa chỉ ví của bạn!\n<code>${checkUser.address}</code>\n
-Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
-Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
-Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a> 
-` , this.keyboardMarkup);
+      const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>\nĐây là địa chỉ ví của bạn!\n<code>${checkUser.address}</code>\n
+      Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
+      Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
+      Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
       const startInstances = this.startInstances.get(options.userId) || [];
       startInstances.push(message);
       if (startInstances.length > 1) {
@@ -106,6 +108,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
     }
   }
 
+
   async handleMessage(msg: any) {
     const options = {
       userId: msg.update.message.from.id,
@@ -116,11 +119,11 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
     if (data) {
       return await this.handleUserAction(msg, options, data);
     }
-    return await this.handleUserCommands(msg, options.text);
+    return await this.handleUserCommands(msg, options, data);
 
   }
-  async handleUserCommands(msg: any, text: any) {
-    switch (text) {
+  async handleUserCommands(msg: any, options: any, data: any) {
+    switch (options.text) {
       case '/clear':
         try {
           return await this.deleteHistory(msg);
@@ -131,12 +134,19 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         return await msg.reply('havent implemented');
       case '/help':
         return await msg.reply('havent implemented');
+      case '/token':
+        await msg.reply(`Available Tokens`, this.tokens);
+        break;
       default:
         const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
         return this.deleteBotMessage(finalMessage, 5000);
     }
   }
-
+  async handleChangingToken(token: string, msg: any) {
+    await this.walletService.changeToken(token);
+    const message = await msg.reply(`changed to token ${token}`)
+    this.deleteBotMessage(message, 5000);
+  }
   async handleUserAction(msg: any, options: any, data: DataCache) {
     if (options.text === '/cancel') {
       this.cacheManager.del(options.userId);
@@ -161,6 +171,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
         await this.handleSendMoneyAction(msg, options, data);
         break;
       default:
+        this.cacheManager.del(options.userId);
         await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
         break;
     }
@@ -202,12 +213,18 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       case Button.CANCEL:
         await this.handleCancelButton(msg, options, checkUser);
         break;
+      case Button.HUSD:
+        await this.handleChangingToken(Button.HUSD, msg);
+        break;
+      case Button.MTS:
+        await this.handleChangingToken(Button.MTS, msg);
+        break
       default:
         await this.cacheManager.del(options.userId);
         await msg.reply(`Xin lỗi tôi không hiểu`);
         await msg.reply(
           'Tôi chỉ thực hiện được như bên dưới thôi!',
-          this.keyboardMarkup,
+          this.handleButton(msg),
         );
         break;
     }
@@ -662,7 +679,7 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
     // const info = await this.walletService.checkInformation(options.userId);
     const add = await this.walletService.getAddressById(options.userId);
     const balane = await this.walletService.getBalance(add);
-    const finalMessage = await msg.replyWithHTML(`Balance:${balane} <b>HUSD</b>`);
+    const finalMessage = await msg.replyWithHTML(`Balance:${balane} <b>${await this.walletService.getTokenSymbol()}</b>`);
     this.deleteBotMessage(finalMessage, 30000)
     await this.cacheManager.del(options.userId);
   }

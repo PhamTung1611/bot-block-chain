@@ -19,5 +19,9 @@ export const botCommand = [
     {
         command: 'cancel',
         description: 'cancel action',
+    },
+    {
+        command: 'token',
+        description: 'change token',
     }
 ]

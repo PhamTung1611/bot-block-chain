@@ -11,5 +11,6 @@ export enum Action {
   HISTORY = 'History',
   SEND_MONEY_ADDRESS = 'Send money by adress',
   SEND_MONEY_PUBLIC_KEY = 'sendMoneyPublicKey',
+  CHANGE_TOKEN='Change token',
   NOTTHING = '',
 }

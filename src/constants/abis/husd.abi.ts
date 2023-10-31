@@ -1,4 +1,4 @@
-export const abiChain = [
+export const HUSD = [
   {
     inputs: [
       {

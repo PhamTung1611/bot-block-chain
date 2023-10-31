@@ -11,4 +11,6 @@ export enum Button {
   HISTORY = 'history',
   SEARCH = 'search',
   TEST = 'test',
+  HUSD = "HUSD",
+  MTS = "MTS"
 }

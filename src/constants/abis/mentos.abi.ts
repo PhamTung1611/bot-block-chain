@@ -1,4 +1,4 @@
-export const MentosAbiChain = [
+export const Mentos = [
     {
         "inputs": [
             {

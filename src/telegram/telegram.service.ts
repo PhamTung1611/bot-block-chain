@@ -46,9 +46,6 @@ export class TelegramService {
       Markup.button.callback('Transaction History', Button.HISTORY),
       Markup.button.callback('Balance', Button.INFORMATION),
     ],
-    //  [
-    //     Markup.button.callback('Test', Button.TEST)
-    // ]
   ]);
 
   private keyCreateAccount = Markup.inlineKeyboard([
@@ -165,16 +162,6 @@ Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>
       case Action.SEND_MONEY_ADDRESS:
         await this.handleSendMoneyAction(msg, options, data);
         break;
-      case '/clear':
-        try {
-          return await this.deleteHistory(msg);
-        } catch (err) {
-          return await msg.reply('some thing went wrong');
-        }
-      case '/info':
-        return await msg.reply('havent implemented')
-      case '/help':
-        return await msg.reply('havent implemented')
       default:
         await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
         break;

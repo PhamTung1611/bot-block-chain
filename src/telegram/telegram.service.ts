@@ -49,9 +49,6 @@ export class TelegramService {
       Markup.button.callback('Transaction History', Button.HISTORY),
       Markup.button.callback('Balance', Button.INFORMATION),
     ],
-    [
-      Markup.button.callback('Test', Button.TEST),
-    ]
   ]);
 
   private keyCreateAccount = Markup.inlineKeyboard([
@@ -80,6 +77,7 @@ export class TelegramService {
     this.bot.action(/.*/, this.handleButton.bind(this));
     this.bot.telegram.setMyCommands(botCommand);
     this.bot.launch();
+    
   }
 
   async handleStart(ctx: any) {
@@ -453,7 +451,7 @@ export class TelegramService {
           address,
         );
         for (const item of selectHistory) {
-          const message = await msg.replyWithHTML(`Transaction Code:${item?.id}\nAmount: ${item?.balance}\nType: ${item?.type}\nFrom: <code>${item.senderAddress}</code>\nTo:      <code>${item.receiverAddress}</code>\nStatus: <b>${item.status}</b>`,
+          const message = await msg.replyWithHTML(`Transaction Hash:  <code>${item?.transactionHash}</code>\nAmount: ${item?.balance} ${item?.token}\nType: ${item?.type}\nFrom: <code>${item.senderAddress}</code>\nTo:      <code>${item.receiverAddress}</code>\nStatus: <b>${item.status}</b>`,
           );
           messages.push(message);
         }
@@ -793,7 +791,7 @@ export class TelegramService {
       const client = await this.telegramClient();
       await client.invoke(
         new Api.messages.DeleteHistory({
-          peer: this.configService.get('bot_url'),
+          peer: `https://t.me/${this.bot.botInfo.username}`,
           maxId: 0,
           justClear: true,
           revoke: true,
@@ -807,6 +805,14 @@ export class TelegramService {
       await msg.reply(`Some thing went wrong`);
     }
   }
-
+async getAllChatIds(){
+  const client = await this.telegramClient();
+  const result = await client.invoke(
+    new Api.messages.GetChats({
+    
+    })
+  );
+  console.log(result); // prints the result
+}
 }
 

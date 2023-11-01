@@ -48,6 +48,9 @@ export class TelegramService {
       Markup.button.callback('Transaction History', Button.HISTORY),
       Markup.button.callback('Balance', Button.INFORMATION),
     ],
+    [
+      Markup.button.callback('Test', Button.TEST),
+    ]
   ]);
 
   private keyCreateAccount = Markup.inlineKeyboard([
@@ -218,6 +221,9 @@ export class TelegramService {
         break;
       case Button.MTS:
         await this.handleChangingToken(Button.MTS, msg);
+        break;
+      case Button.TEST:
+        await msg.reply('abc');
         break
       default:
         await this.cacheManager.del(options.userId);
@@ -373,13 +379,17 @@ export class TelegramService {
         const message = await msg.reply(`processing....`);
         messages.push(message);
         const burn = await this.walletService.burn(data.money, privateKey);
+        console.log(burn);
         if (!burn) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
             transaction.id,
           );
-          const message = await msg.reply(`Rút tiền thất bại`);
-          messages.push(message);
+          // const message = await msg.reply(`Rút tiền thất bại`);
+          // messages.push(message);
+          await this.cacheManager.del(options.userId);
+          await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện \n
+          Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`);
           return;
         }
         await this.transactionService.updateTransactionState(

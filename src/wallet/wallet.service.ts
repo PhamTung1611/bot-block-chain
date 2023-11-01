@@ -9,7 +9,7 @@ import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
 import { HUSD } from 'src/constants/abis/husd.abi';
 import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
-import { Mentos } from 'src/constants/abis/mentos.abi';
+import { Mentos } from 'src/constants/abis/mentos.abi'; 
 
 @Injectable()
 export class WalletService {
@@ -78,8 +78,11 @@ export class WalletService {
       address,
       this.convertToEther(Number(amount)),
     );
-
-    if (txResponse) {
+      const feeGas =await this.checkFeeGas(txResponse);
+      // console.log(typeof(feeGas));
+      
+      const token =await this.getUserNativeToken(address)
+    if (Number(token)-Number(feeGas)>0) {
       return true;
     } else {
       return false;
@@ -122,9 +125,15 @@ export class WalletService {
       );
       const tx = await contract.burn(this.convertToEther(Number(amount)));
       await tx.wait();
-      return true;
+      // const feeGas =await this.checkFeeGas(tx);
+      // // console.log(typeof(feeGas));
+      
+      // const token =await this.getUserNativeToken(sourceWallet.address)
+      // // console.log(typeof(feeGas));
+
+        return true;
     } catch (error) {
-      console.log(error);
+      // console.log(error);
       return false;
     }
   }
@@ -320,5 +329,16 @@ export class WalletService {
       return false;
     }
     return true;
+  }
+  async checkFeeGas(txResponse){
+    const gasprice = (await this.provider.getFeeData()).gasPrice;
+    const piority = ((await this.provider.getFeeData()).maxPriorityFeePerGas);
+    const gasUnit= (await this.provider.estimateGas(txResponse));
+    const transactionFee =(gasprice+piority)*gasUnit;
+    console.log('gas price: ' +gasprice);
+    console.log('piority per gas: ' + piority);
+    console.log('gas unit: ' +gasUnit);
+    console.log('Transaction Fee: ' +ethers.formatUnits(transactionFee));
+    return transactionFee;
   }
 }

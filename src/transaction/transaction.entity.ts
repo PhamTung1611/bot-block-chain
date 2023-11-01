@@ -12,6 +12,12 @@ export class TransactionEntity {
   id: string;
 
   @Column('text')
+  transactionHash: string;
+
+  @Column('text')
+  token: string;
+
+  @Column('text')
   senderAddress: string;
 
   @Column('text')

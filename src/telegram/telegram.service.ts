@@ -31,6 +31,7 @@ import { sleep } from 'telegram/Helpers';
 export class TelegramService {
   // Create an array to store messages for each user
   private startInstances: Map<number, string[]> = new Map();
+  private tokenInstances: Map<number, string[]> = new Map();
   private processMessages: Map<number, string> = new Map();
   private apiId = Number(this.configService.get('api_id'));
   private apiHash = this.configService.get('api_hash');
@@ -55,7 +56,7 @@ export class TelegramService {
   ]);
   private tokens = Markup.inlineKeyboard([
     [Markup.button.callback('HUSD', Button.HUSD),
-    Markup.button.callback('MTS', Button.MTS)],
+    Markup.button.callback('MTK', Button.MTK)],
 
   ]);
 
@@ -92,10 +93,10 @@ export class TelegramService {
       );
     } else {
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
-      const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>\nĐây là địa chỉ ví của bạn!\n<code>${checkUser.address}</code>\n
-      Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
-      Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
-      Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
+      const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
+💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
+📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
+🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
       const startInstances = this.startInstances.get(options.userId) || [];
       startInstances.push(message);
       if (startInstances.length > 1) {
@@ -135,17 +136,33 @@ export class TelegramService {
       case '/help':
         return await msg.reply('havent implemented');
       case '/token':
-        await msg.reply(`Available Tokens`, this.tokens);
+        await this.handleToken(msg, options);
+        break;
+      case '/cancel':
+        const message = await msg.reply(`Đang không thực hiện hành động nào`);
+        this.deleteBotMessage(message, 5000);
         break;
       default:
         const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
         return this.deleteBotMessage(finalMessage, 5000);
     }
   }
-  async handleChangingToken(token: string, msg: any) {
+  async handleToken(msg: any, options: any) {
+    const tokenMenu = await msg.reply(`Current using ${await this.walletService.getTokenSymbol()} token`, this.tokens);
+    const tokenInstances = this.tokenInstances.get(options.userId) || [];
+    tokenInstances.push(tokenMenu);
+    if (tokenInstances.length > 1) {
+      tokenInstances.reverse();
+      await this.deleteBotMessage(tokenInstances[1], 0);
+      tokenInstances.pop();
+      console.log(`Delete token instance of user ${options.userId}`);
+    }
+    this.tokenInstances.set(options.userId, tokenInstances);
+  }
+  async handleChangingToken(token: string, msg: any, options: any) {
     await this.walletService.changeToken(token);
-    const message = await msg.reply(`changed to token ${token}`)
-    this.deleteBotMessage(message, 5000);
+    const message = await msg.reply(`changed to token ${token}`, this.handleToken(msg, options))
+    this.deleteBotMessage(message, 3000);
   }
   async handleUserAction(msg: any, options: any, data: DataCache) {
     if (options.text === '/cancel') {
@@ -214,10 +231,10 @@ export class TelegramService {
         await this.handleCancelButton(msg, options, checkUser);
         break;
       case Button.HUSD:
-        await this.handleChangingToken(Button.HUSD, msg);
+        await this.handleChangingToken(Button.HUSD, msg, options);
         break;
-      case Button.MTS:
-        await this.handleChangingToken(Button.MTS, msg);
+      case Button.MTK:
+        await this.handleChangingToken(Button.MTK, msg, options);
         break
       default:
         await this.cacheManager.del(options.userId);
@@ -276,11 +293,15 @@ export class TelegramService {
     msg: any
   ): Promise<any> {
     const address = await this.walletService.checkAddress(options.userId);
+    const token = await this.walletService.getTokenSymbol();
+    const defaultTxHash = 'Unavailable';
     const createTransaction = {
-      balance: String(data.money),
-      type: String(data.action),
+      transactionHash: String(defaultTxHash),
+      token: token,
       senderAddress: address,
       receiverAddress: address,
+      balance: String(data.money),
+      type: String(data.action),
       status: TransactionStatus.CREATED,
     };
     const transaction = await this.transactionService.createTransaction(createTransaction);
@@ -307,6 +328,7 @@ export class TelegramService {
       return false;
     } else {
       await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
+      await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
       const message = await msg.reply(`Nạp tiền thành công`);
       const process = this.processMessages.get(options.userId)
       this.cacheManager.del(options.userId);
@@ -343,7 +365,11 @@ export class TelegramService {
         await this.cacheManager.set(options.userId, data, 30000);
 
         const address = await this.walletService.checkAddress(options.userId);
+        const token = await this.walletService.getTokenSymbol();
+        const defaultTxHash = 'Unavailable';
         const createTransaction = {
+          transactionHash: String(defaultTxHash),
+          token: token,
           balance: String(data.money),
           type: String(data.action),
           senderAddress: address,
@@ -386,6 +412,7 @@ export class TelegramService {
           TransactionStatus.SUCCESS,
           transaction.id,
         );
+        await this.transactionService.updateTransactionHash(Object(burn).txHash, transaction.id);
         await this.cacheManager.del(options.userId);
         const message1 = await msg.reply(`Rút tiền thành công`, this.handleStart(msg));
         messages.push(message1);
@@ -419,11 +446,11 @@ export class TelegramService {
           address,
         );
         for (const item of selectHistory) {
-          const message = await msg.reply(
-            `Mã giao dịch:\n ${item?.id}\nSố tiền: ${item?.balance}\nKiểu: ${item?.type}\nTài khoản nguồn: ${item.senderAddress}\nTài khoản nhận: ${item.receiverAddress}\n Trạng thái: ${item.status}`,
+          const message = await msg.replyWithHTML(`Transaction Code:${item?.id}\nAmount: ${item?.balance}\nType: ${item?.type}\nFrom: <code>${item.senderAddress}</code>\nTo:      <code>${item.receiverAddress}</code>\nStatus: <b>${item.status}</b>`,
           );
           messages.push(message);
         }
+        sleep(10000);
         const message = msg.replyWithHTML(`Bạn đang xem <b>${selectHistory.length} giao dịch </b>`, this.handleStart(msg));
         await this.cacheManager.del(options.userId);
         for (const message of messages) {
@@ -476,8 +503,12 @@ export class TelegramService {
       }
       const receiver = data.receiver;
       const sender = await this.walletService.getAddressById(options.userId);
+      const token = await this.walletService.getTokenSymbol();
+      const defaultTxHash = 'Unavailable';
       const createTransaction = {
         balance: String(data.money),
+        transactionHash: String(defaultTxHash),
+        token: token,
         type: Action.SEND_MONEY_ADDRESS,
         senderAddress: sender,
         receiverAddress: receiver,
@@ -496,14 +527,14 @@ export class TelegramService {
         TransactionStatus.PENDING,
         transaction.id,
       );
-      if (checkStatus === TransactionStatus.SUCCESS && data.step === 2) {
+      if (Object(checkStatus).status === TransactionStatus.SUCCESS && data.step === 2) {
         await this.transactionService.updateTransactionState(
           TransactionStatus.SUCCESS,
           transaction.id,
         );
+        await this.transactionService.updateTransactionHash(Object(checkStatus).txHash, transaction.id);
         const message = await msg.reply(`Chuyển tiền thành công`, this.handleStart(msg));
         messages.push(message);
-
         data.step = 1;
         data.action = '';
       } else if (checkStatus === WalletStatus.NOT_ENOUGH_FUND) {

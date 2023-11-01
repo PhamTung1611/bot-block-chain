@@ -34,6 +34,19 @@ export class TransactionService {
       return false;
     }
   }
+  async updateTransactionHash(
+    txhash: string,
+    id: string,
+  ): Promise<boolean> {
+    const transaction = await this.findTransactionById(id);
+    transaction.transactionHash = txhash;
+    const saveTransaction = await this.transactionRepository.save(transaction);
+    if (saveTransaction) {
+      return true;
+    } else {
+      return false;
+    }
+  }
   async findTransactionById(
     id: string,
   ): Promise<TransactionEntity | undefined> {

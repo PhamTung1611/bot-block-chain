@@ -12,5 +12,5 @@ export enum Button {
   SEARCH = 'search',
   TEST = 'test',
   HUSD = "HUSD",
-  MTS = "MTS"
+  MTK = "MTK"
 }

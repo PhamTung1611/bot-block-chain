@@ -38,7 +38,7 @@ export class WalletService {
         coin = HUSDContractAddress.token.toString();
         this.abi = HUSD;
         break;
-      case 'MTS':
+      case 'MTK':
         this.contractAddress = MentosContractAddress.address.toString();
         coin = MentosContractAddress.token.toString();
         this.abi = Mentos;
@@ -78,17 +78,18 @@ export class WalletService {
       address,
       this.convertToEther(Number(amount)),
     );
-      const feeGas =await this.checkFeeGas(txResponse);
-      // console.log(typeof(feeGas));
-      
-      const token =await this.getUserNativeToken(address)
-    if (Number(token)-Number(feeGas)>0) {
-      return true;
+   
+    if (txResponse) {
+      return {
+        status: true,
+        txhash: txResponse.hash
+      };
     } else {
       return false;
     }
   }
   async getUserNativeToken(address: string) {
+
     return ethers.formatUnits(await this.provider.getBalance(address))
   }
   async addAuthorizedOwner(newOwner: string) {
@@ -112,7 +113,7 @@ export class WalletService {
       this.abi,
       this.provider,
     );
-    const symbol =await contract.symbol();
+    const symbol = await contract.symbol();
     return symbol;
   }
   async burn(amount: Uint256, privateKey: string) {
@@ -125,13 +126,7 @@ export class WalletService {
       );
       const tx = await contract.burn(this.convertToEther(Number(amount)));
       await tx.wait();
-      // const feeGas =await this.checkFeeGas(tx);
-      // // console.log(typeof(feeGas));
-      
-      // const token =await this.getUserNativeToken(sourceWallet.address)
-      // // console.log(typeof(feeGas));
-
-        return true;
+      return true;
     } catch (error) {
       // console.log(error);
       return false;
@@ -150,7 +145,11 @@ export class WalletService {
         this.convertToEther(Number(amount)),
       );
       tx.nonce++;
-      return true;
+      console.log(tx.hash);
+      return {
+        status: true,
+        transaction: tx,
+      };
     } catch (error) {
       console.log(error);
       return false;
@@ -197,46 +196,33 @@ export class WalletService {
         userId: userId,
       },
     });
-    const receiver = await this.walletRepository.findOne({
-      where: {
-        address: receiverAddress
-      }
-    })
-    console.log(123, receiver);
-    if (!receiver) {
-      const balance = await this.getBalance(sender.address);
-      if (balance < Number(money)) {
-        return WalletStatus.NOT_ENOUGH_FUND;
-      }
-      const privateKey = await this.checkPrivateKeyByID(userId);
-      const checkTransaction = await this.transfer(
-        receiverAddress,
-        money,
-        privateKey,
-      );
-      if (!checkTransaction) {
-        return TransactionStatus.FAIL;
-      }
-      return TransactionStatus.SUCCESS;
-    } else {
-      if (sender.userId == receiver.userId) {
-        return WalletStatus.SELF;
-      }
-      const balance = await this.getBalance(sender.address);
-      if (balance < Number(money)) {
-        return WalletStatus.NOT_ENOUGH_FUND;
-      }
-      const privateKey = await this.checkPrivateKeyByID(userId);
-      const checkTransaction = await this.transfer(
-        receiverAddress,
-        money,
-        privateKey,
-      );
-      if (!checkTransaction) {
-        return TransactionStatus.FAIL;
-      }
-      return TransactionStatus.SUCCESS;
+
+    const balance = await this.getBalance(sender.address);
+    if (balance < Number(money)) {
+      return WalletStatus.NOT_ENOUGH_FUND;
     }
+    const privateKey = await this.checkPrivateKeyByID(userId);
+    const checkTransaction = await this.transfer(
+      receiverAddress,
+      money,
+      privateKey,
+    );
+    if (!checkTransaction) {
+      return TransactionStatus.FAIL;
+    }
+    if (sender.address == receiverAddress) {
+      return WalletStatus.SELF;
+    }
+    if (balance < Number(money)) {
+      return WalletStatus.NOT_ENOUGH_FUND;
+    }
+    if (!checkTransaction) {
+      return TransactionStatus.FAIL;
+    }
+    return {
+      status: TransactionStatus.SUCCESS,
+      txHash: checkTransaction.transaction.hash,
+    };
   }
   async withdrawn(userId: string, money: number) {
     const user = await this.walletRepository.findOne({

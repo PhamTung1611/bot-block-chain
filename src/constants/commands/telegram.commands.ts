@@ -6,7 +6,7 @@ export const botCommand = [
 
     {
         command: 'start',
-        description: 'start action',
+        description: 'start Menu',
     },
     {
         command: 'info',

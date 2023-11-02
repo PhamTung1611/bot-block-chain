@@ -95,8 +95,9 @@ export class TelegramService {
     } else {
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
+🪙Token Selected: ${await this.walletService.getTokenSymbol()}\n    
 💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
-📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io/address/${checkUser.address}"><u>click here</u>!</a>\n 
+📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
       const startInstances = this.startInstances.get(options.userId) || [];
       startInstances.push(message);
@@ -162,8 +163,8 @@ export class TelegramService {
   }
   async handleChangingToken(token: string, msg: any, options: any) {
     await this.walletService.changeToken(token);
-    const message = await msg.reply(`changed to token ${token}`, this.handleToken(msg, options))
-    this.deleteBotMessage(message, 5000);
+    const message =await msg.reply(`changed to token ${token}`, this.handleToken(msg, options))
+    await this.deleteBotMessage(message,5000);
   }
   async handleUserAction(msg: any, options: any, data: DataCache) {
     if (options.text === '/cancel') {
@@ -486,6 +487,7 @@ export class TelegramService {
         messages.push(await msg.reply(`Địa chỉ người dùng không tồn tại`));
         messages.push(await msg.reply('Vui lòng Điền lại địa chỉ'));
         data.step = 1;
+        await this.deleteBotMessages(messages, 5000)
         return;
       }
       if (data.action === Action.TRANSFER_BY_ADDRESS) {
@@ -493,7 +495,7 @@ export class TelegramService {
         data.step = 3;
         data.receiver = address;
         messages.push(await msg.reply('Bạn muốn chuyển bao nhiêu tiền'));
-
+        await this.deleteBotMessages(messages, 5000)
         return;
       }
     } else {
@@ -501,6 +503,7 @@ export class TelegramService {
       await this.cacheManager.del(options.userId);
     }
     await this.deleteBotMessages(messages, 5000)
+
   }
   async handleSendMoneyAction(msg: any, options: any, data: DataCache) {
     const messages = [];
@@ -779,13 +782,16 @@ export class TelegramService {
     if (message.chat) {
       const chatId = message.chat.id;
       const messageId = message.message_id;
-      setTimeout(() => {
-        (async () => {
-          await this.bot.telegram.deleteMessage(chatId, messageId);
-        })();
-      }, delay);
-    }
-    else {
+      try {
+        setTimeout(() => {
+          (async () => {
+            await this.bot.telegram.deleteMessage(chatId, messageId);
+          })();
+        }, delay);
+      } catch (error) {
+        console.log(error);
+      }
+    } else {
       console.log('Something went wrong');
     }
   }

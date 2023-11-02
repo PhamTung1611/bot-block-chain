@@ -126,7 +126,10 @@ export class WalletService {
       );
       const tx = await contract.burn(this.convertToEther(Number(amount)));
       await tx.wait();
-      return true;
+      return {
+        status:true,
+        txHash:tx.hash,
+      };
     } catch (error) {
       // console.log(error);
       return false;

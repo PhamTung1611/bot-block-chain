@@ -77,7 +77,7 @@ export class TelegramService {
     this.bot.action(/.*/, this.handleButton.bind(this));
     this.bot.telegram.setMyCommands(botCommand);
     this.bot.launch();
-    
+
   }
 
   async handleStart(ctx: any) {
@@ -163,13 +163,13 @@ export class TelegramService {
   async handleChangingToken(token: string, msg: any, options: any) {
     await this.walletService.changeToken(token);
     const message = await msg.reply(`changed to token ${token}`, this.handleToken(msg, options))
-    this.deleteBotMessage(message, 3000);
+    this.deleteBotMessage(message, 5000);
   }
   async handleUserAction(msg: any, options: any, data: DataCache) {
     if (options.text === '/cancel') {
       this.cacheManager.del(options.userId);
       const message = await msg.reply('Action Cancelled', this.handleStart(msg));
-      this.deleteBotMessage(message, 3000);
+      this.deleteBotMessage(message, 5000);
       return;
     }
     switch (data.action) {
@@ -190,7 +190,8 @@ export class TelegramService {
         break;
       default:
         this.cacheManager.del(options.userId);
-        await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
+        const message = await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
+        this.deleteBotMessage(message, 5000);
         break;
     }
   }
@@ -239,11 +240,13 @@ export class TelegramService {
         break
       default:
         await this.cacheManager.del(options.userId);
-        await msg.reply(`Xin lỗi tôi không hiểu`);
-        await msg.reply(
+        const messages = [];
+        messages.push(await msg.reply(`Xin lỗi tôi không hiểu`));
+        messages.push(await msg.reply(
           'Tôi chỉ thực hiện được như bên dưới thôi!',
-          this.handleButton(msg),
-        );
+          await this.handleButton(msg),
+        ));
+        await this.deleteBotMessages(messages, 5000);
         break;
     }
   }
@@ -274,7 +277,7 @@ export class TelegramService {
   ): Promise<boolean> {
     if (!Number(options.text)) {
       const message = await msg.reply("Số tiền sai cú pháp, Vui lòng nhập lại! Để hủy thao tác nhập lệnh /cancel");
-      this.deleteBotMessage(message, 3000);
+      this.deleteBotMessage(message, 5000);
       return false;
     }
     if (Number(options.text) && Number(options.text) > 0) {
@@ -284,7 +287,7 @@ export class TelegramService {
     }
     await this.cacheManager.del(options.userId);
     const message = await msg.reply("Vui lòng thực hiện lại");
-    this.deleteBotMessage(message, 3000);
+    this.deleteBotMessage(message, 5000);
     return false;
   }
 
@@ -316,28 +319,26 @@ export class TelegramService {
     data: DataCache,
     msg: any
   ): Promise<boolean> {
+    const messages = [];
     const transaction = await this.createDepositTransaction(options, data, msg);
     await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
-    const mint = await this.walletService.mint(transaction.senderAddress, data.money);
+    const mint = await this.walletService.mint(transaction.senderAddress, data.money);//delay job
     if (!mint) {
       await this.transactionService.updateTransactionState(TransactionStatus.FAIL, transaction.id);
-      const message = await msg.reply(`Nạp tiền thất bại`)
-      const process = this.processMessages.get(options.userId)
-      this.deleteBotMessage(process, 3000);
-      this.deleteBotMessage(message, 3000);
-
+      messages.push(await msg.reply(`Nạp tiền thất bại`));
+      messages.push(this.processMessages.get(options.userId));
+      await this.deleteBotMessages(messages, 5000);
       return false;
     } else {
       await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
       await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
-      const message = await msg.reply(`Nạp tiền thành công`);
-      const process = this.processMessages.get(options.userId)
+      messages.push(await msg.reply(`Nạp tiền thành công`));
+      messages.push(this.processMessages.get(options.userId));
       this.cacheManager.del(options.userId);
-      console.log(process);
-      this.deleteBotMessage(process, 3000);
-      this.deleteBotMessage(message, 3000);
+      this.deleteBotMessages(messages, 5000);
       await sleep(2000);
-      await msg.reply(`tôi có thể giúp gì tiếp cho bạn`, this.handleStart(msg));
+      const message = await msg.reply(`tôi có thể giúp gì tiếp cho bạn`, this.handleStart(msg));
+      this.deleteBotMessage(message, 5000);
       return true;
     }
   }
@@ -417,78 +418,89 @@ export class TelegramService {
           TransactionStatus.SUCCESS,
           transaction.id,
         );
+        console.log(Object(burn).txHash);
         await this.transactionService.updateTransactionHash(Object(burn).txHash, transaction.id);
         await this.cacheManager.del(options.userId);
         const message1 = await msg.reply(`Rút tiền thành công`, this.handleStart(msg));
         messages.push(message1);
-        for (const message of messages) {
-          this.deleteBotMessage(message, 3000);
-        }
+        this.deleteBotMessages(messages, 5000);
         return;
       }
     }
   }
 
   async handleHistoryAction(msg: any, options: any, data: DataCache) {
-    const messages = [];
-    const address = await this.walletService.checkAddress(options.userId);
+    try {
+      const address = await this.walletService.checkAddress(options.userId);
+      const listHistory = await this.transactionService.getListHistory(address);
 
-    const listHistory = await this.transactionService.getListHistory(address);
-    if (data.step === 1) {
-      const amountHistory = options.text;
-      if (!Number(amountHistory)) {
-        await this.cacheManager.del(options.userId);
-        const message = await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
-        messages.push(message);
-      } else if (Number(listHistory) < Number(amountHistory)) {
-        await this.cacheManager.del(options.userId);
-        const message = await msg.reply(
-          `Xin lỗi bạn chỉ có ${listHistory} giao dịch thôi`);
-        messages.push(message);
-      } else {
+      if (data.step === 1) {
+        const amountHistory = options.text;
+        if (!Number(amountHistory)) {
+          await this.cacheManager.del(options.userId);
+          const message = await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
+          this.deleteBotMessages([message], 5000);
+          return;
+        } else if (Number(listHistory) < Number(amountHistory)) {
+          await this.cacheManager.del(options.userId);
+          const message = await msg.reply(
+            `Xin lỗi bạn chỉ có ${listHistory} giao dịch thôi`,
+          );
+          this.deleteBotMessages([message], 5000);
+          return;
+        }
+
         const selectHistory = await this.transactionService.getAmountHistory(
           Number(amountHistory),
           address,
         );
-        for (const item of selectHistory) {
-          const message = await msg.replyWithHTML(`Transaction Hash:  <code>${item?.transactionHash}</code>\nAmount: ${item?.balance} ${item?.token}\nType: ${item?.type}\nFrom: <code>${item.senderAddress}</code>\nTo:      <code>${item.receiverAddress}</code>\nStatus: <b>${item.status}</b>`,
-          );
-          messages.push(message);
-        }
-        sleep(10000);
-        const message = msg.replyWithHTML(`Bạn đang xem <b>${selectHistory.length} giao dịch </b>`, this.handleStart(msg));
-        await this.cacheManager.del(options.userId);
-        for (const message of messages) {
-          this.deleteBotMessage(message, 30000);
-        }
 
+        let transaction = '';
+        let i = 1;
+        for (const item of selectHistory) {
+          transaction += `${i++}.Transaction Hash:  <code>${item?.transactionHash}</code>\nAmount: ${item?.balance} <b>${item?.token}</b>\nType:<b>${item?.type}</b>\nStatus:<b>${item.status}</b>\nTransaction created at:<b> ${format(item?.createdDate, 'yyyy-MM-dd HH:mm:ss')}</b>\n\n`;
+        }
+        const messages = [];
+        messages.push(await msg.replyWithHTML(transaction));
+        messages.push(
+          await msg.replyWithHTML(
+            `Bạn đang xem <b>${selectHistory.length} giao dịch </b>`,
+            this.handleStart(msg),
+          ),
+        );
+        await this.cacheManager.del(options.userId);
+        this.deleteBotMessages(messages, 30000);
       }
+    } catch (error) {
+      console.error(error);
     }
   }
   async handleTransferByAddressAction(msg: any, options: any, data: DataCache) {
+    const messages = [];
     if (data.step === 1) {
       const address = options.text;
       data.step = 2;
       const checkAddress =
         await this.walletService.checkAddressContract(address);
       if (!checkAddress) {
-        await msg.reply(`Địa chỉ người dùng không tồn tại`);
-        await this.cacheManager.del(options.userId);
-        await msg.reply('Vui lòng thử lại', this.keyTransferMethod);
+        messages.push(await msg.reply(`Địa chỉ người dùng không tồn tại`));
+        messages.push(await msg.reply('Vui lòng Điền lại địa chỉ'));
+        data.step = 1;
         return;
       }
       if (data.action === Action.TRANSFER_BY_ADDRESS) {
         data.action = Action.SEND_MONEY_ADDRESS;
         data.step = 3;
         data.receiver = address;
-        const message = await msg.reply('Bạn muốn chuyển bao nhiêu tiền');
-        this.deleteBotMessage(message, 5000)
+        messages.push(await msg.reply('Bạn muốn chuyển bao nhiêu tiền'));
+
         return;
       }
     } else {
-      await msg.reply(`Có gì đó không ổn vui lòng thử lại`);
+      messages.push(await msg.reply(`Có gì đó không ổn vui lòng thử lại`));
       await this.cacheManager.del(options.userId);
     }
+    await this.deleteBotMessages(messages, 5000)
   }
   async handleSendMoneyAction(msg: any, options: any, data: DataCache) {
     const messages = [];
@@ -496,10 +508,12 @@ export class TelegramService {
       const money = options.text;
       if (!Number(money)) {
         await this.cacheManager.del(options.userId);
-        return await msg.reply(
+        const message = await msg.reply(
           'Vui lòng thực hiện lại',
-          this.keyTransferMethod,
-        );
+          this.handleStart(msg),
+        )
+        this.deleteBotMessage(message, 5000);
+        return;
       }
       if (Number(money) && Number(money) > 0) {
         data.money = options.text;
@@ -586,6 +600,7 @@ export class TelegramService {
     data: DataCache,
     checkUser: any,
   ) {
+    const messages = [];
     if (data.action === '') {
       if (!checkUser) {
         const wallet = await this.walletService.generateNewWallet();
@@ -593,7 +608,7 @@ export class TelegramService {
           userId: msg.chat.id,
           username: msg.chat.first_name,
         };
-        await msg.reply(`Tạo tài khoản cho user ${user.userId}`);
+        messages.push(await msg.reply(`Tạo tài khoản cho user ${user.userId}...`));
         const data = await this.walletService.createWallet(
           {
             ...wallet,
@@ -603,23 +618,24 @@ export class TelegramService {
         );
 
         if (data) {
-          await msg.reply(`Tạo tài khoản thành công`);
-          await msg.reply(
-            `Xin chào ${options.userId}, tôi có thể giúp gì cho bạn!`,
-            this.keyboardMarkup,
-          );
+          messages.push(await msg.reply(
+            `Tạo tài khoản thành công!`,
+            this.handleStart(msg),
+          ));
           await this.cacheManager.del(options.userId);
         }
       } else {
         await this.cacheManager.del(options.userId);
-        return await msg.reply(
+        messages.push(await msg.reply(
           'Bạn đã có tài khoản vui lòng thực hiện chức năng khác',
-          this.keyboardMarkup,
-        );
+          this.handleStart(msg),
+        ));
+        return;
       }
     } else {
       await this.cacheManager.del(options.userId);
     }
+    await this.deleteBotMessages(messages, 5000);
   }
   async handleDepositButton(
     msg: any,
@@ -635,11 +651,12 @@ export class TelegramService {
       const finalMessage = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
       this.deleteBotMessage(finalMessage, 10000)
     } else {
-      await msg.reply(`Canceling ${data.action}`);
+      const message = await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.DEPOSIT, 1);
       const finalMessage = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
       this.deleteBotMessage(finalMessage, 10000)
+      this.deleteBotMessage(message, 10000)
     }
   }
   async handleWithDrawButton(
@@ -687,15 +704,16 @@ export class TelegramService {
       const finalMessage = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(finalMessage, 30000)
+      this.deleteBotMessage(finalMessage, 10000)
     } else {
-      // await msg.reply(`Canceling ${data.action}`);
+      const message = await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.HISTORY, 1);
       const finalMessage = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(finalMessage, 30000)
+      this.deleteBotMessage(message, 10000)
+      this.deleteBotMessage(finalMessage, 10000)
     }
   }
   async handleInformationButton(
@@ -731,13 +749,13 @@ export class TelegramService {
     if (data.action === '') {
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       const finalMessage = await msg.reply('Điền địa chỉ người nhận');
-      this.deleteBotMessage(finalMessage, 30000)
+      await this.deleteBotMessage(finalMessage, 10000)
     } else {
       // await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       const finalMessage = await msg.reply('Điền địa chỉ người nhận');
-      this.deleteBotMessage(finalMessage, 30000)
+      await this.deleteBotMessage(finalMessage, 10000)
     }
   }
   async handleTransferButton(msg: any, checkUser: any) {
@@ -758,13 +776,23 @@ export class TelegramService {
     this.deleteBotMessage(finalMessage, 30000)
   }
   async deleteBotMessage(message: any, delay: number) {
-    const chatId = message.chat.id;
-    const messageId = message.message_id;
-    setTimeout(() => {
-      (async () => {
-        await this.bot.telegram.deleteMessage(chatId, messageId);
-      })();
-    }, delay);
+    if (message.chat) {
+      const chatId = message.chat.id;
+      const messageId = message.message_id;
+      setTimeout(() => {
+        (async () => {
+          await this.bot.telegram.deleteMessage(chatId, messageId);
+        })();
+      }, delay);
+    }
+    else {
+      console.log('Something went wrong');
+    }
+  }
+  async deleteBotMessages(messages: any[], delay: number) {
+    for (const message of messages) {
+      this.deleteBotMessage(message, delay);
+    }
   }
   async telegramClient() {
     const client = new TelegramClient(this.stringSession, this.apiId, this.apiHash, {
@@ -805,14 +833,14 @@ export class TelegramService {
       await msg.reply(`Some thing went wrong`);
     }
   }
-async getAllChatIds(){
-  const client = await this.telegramClient();
-  const result = await client.invoke(
-    new Api.messages.GetChats({
-    
-    })
-  );
-  console.log(result); // prints the result
-}
+  async getAllChatIds() {
+    const client = await this.telegramClient();
+    const result = await client.invoke(
+      new Api.messages.GetChats({
+
+      })
+    );
+    console.log(result); // prints the result
+  }
 }
 

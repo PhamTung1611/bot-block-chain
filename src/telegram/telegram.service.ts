@@ -843,7 +843,7 @@ export class TelegramService {
           minDate: 43,
         })
       )
-      await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`);
+      await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`,this.handleStart(msg));
     }
     catch (err) {
       console.error(err);

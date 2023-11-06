@@ -101,7 +101,7 @@ export class TelegramService {
     } else {
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
-🪙Token Selected: ${await this.walletService.getTokenSymbol()}\n    
+🪙Token Selected: ${await this.walletService.getTokenSymbol(options.userId)}\n    
 💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
 📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
@@ -156,7 +156,7 @@ export class TelegramService {
     }
   }
   async handleToken(msg: any, options: any) {
-    const tokenMenu = await msg.reply(`Current using ${await this.walletService.getTokenSymbol()} token`, this.tokens);
+    const tokenMenu = await msg.reply(`Current using ${await this.walletService.getTokenSymbol(options.userId)} token`, this.tokens);
     const tokenInstances = this.tokenInstances.get(options.userId) || [];
     tokenInstances.push(tokenMenu);
     if (tokenInstances.length > 1) {
@@ -168,7 +168,7 @@ export class TelegramService {
     this.tokenInstances.set(options.userId, tokenInstances);
   }
   async handleChangingToken(token: string, msg: any, options: any) {
-    await this.walletService.changeToken(token);
+    await this.walletService.changeToken(token,options.userId);
     const message = await msg.reply(`changed to token ${token}`, this.handleStart(msg))
     await this.deleteBotMessage(message, 5000);
   }
@@ -312,7 +312,7 @@ export class TelegramService {
     msg: any
   ): Promise<any> {
     const address = await this.walletService.checkAddress(options.userId);
-    const token = await this.walletService.getTokenSymbol();
+    const token = await this.walletService.getTokenSymbol(options.userId);
     const defaultTxHash = 'Unavailable';
     const createTransaction = {
       transactionHash: String(defaultTxHash),
@@ -339,12 +339,7 @@ export class TelegramService {
     await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
     //mint token
     const mint = await this.walletService.mint(transaction.senderAddress, data.money);
-    if (mint === WalletStatus.NOT_ENOUGH_GAS) {
-      await this.cacheManager.del(options.userId);
-      const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
-      this.deleteBotMessage(message, 5000);
-      return;
-    }
+
     if (!mint) {
       await this.transactionService.updateTransactionState(TransactionStatus.FAIL, transaction.id);
       messages.push(await msg.reply(`Nạp tiền thất bại`));
@@ -352,6 +347,7 @@ export class TelegramService {
       await this.deleteBotMessages(messages, 5000);
       return false;
     }
+    
     await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
     await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
     messages.push(await msg.reply(`Nạp tiền thành công`));
@@ -388,7 +384,7 @@ export class TelegramService {
         await this.cacheManager.set(options.userId, data, 30000);
 
         const address = await this.walletService.checkAddress(options.userId);
-        const token = await this.walletService.getTokenSymbol();
+        const token = await this.walletService.getTokenSymbol(options.userId);
         const defaultTxHash = 'Unavailable';
         const createTransaction = {
           transactionHash: String(defaultTxHash),
@@ -543,7 +539,7 @@ export class TelegramService {
       }
       const receiver = data.receiver;
       const sender = await this.walletService.getAddressById(options.userId);
-      const token = await this.walletService.getTokenSymbol();
+      const token = await this.walletService.getTokenSymbol(options.userId);
       const defaultTxHash = 'Unavailable';
       const createTransaction = {
         balance: String(data.money),
@@ -759,7 +755,7 @@ export class TelegramService {
     // const info = await this.walletService.checkInformation(options.userId);
     const add = await this.walletService.getAddressById(options.userId);
     const balane = await this.walletService.getBalance(add);
-    const message = await msg.replyWithHTML(`Balance:${balane} <b>${await this.walletService.getTokenSymbol()}</b>`, this.deleteButton);
+    const message = await msg.replyWithHTML(`Balance:${balane} <b>${await this.walletService.getTokenSymbol(options.userId)}</b>`, this.deleteButton);
     this.deleteBotMessage(message, 10000)
     await this.cacheManager.del(options.userId);
   }

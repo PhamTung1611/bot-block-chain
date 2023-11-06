@@ -32,18 +32,23 @@ export class WalletService {
     );
   }
 
-  async changeToken(token: string) {
+  async changeToken(token: string, userId: string) {
     let coin: string;
+    const user = await this.walletRepository.findOneBy({
+      userId: userId
+    });
     switch (token) {
       case 'HUSD':
-        this.contractAddress = HUSDContractAddress.address.toString();
-        coin = HUSDContractAddress.token.toString();
-        this.abi = HUSD;
+        this.tokens.set(userId, {
+          contractAddress: '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09',
+          abi: HUSD
+        })
         break;
       case 'MTK':
-        this.contractAddress = MentosContractAddress.address.toString();
-        coin = MentosContractAddress.token.toString();
-        this.abi = Mentos;
+        this.tokens.set(userId, {
+          contractAddress: '0x1D4887765d8bd4Db87688545936ba03a541b9E71',
+          abi: Mentos
+        })
         break;
       default:
         return false;
@@ -85,25 +90,13 @@ export class WalletService {
     });
 
     const userToken = Object(await this.tokens.get(user.userId));
-    console.log(userToken);
     const contractAddress = Object(userToken).contractAddress || this.contractAddress;
     const contractAbi = Object(userToken).abi || this.abi;
-    console.log(contractAddress + '--' + contractAbi);
     const sourceWallet = new Wallet(
       this.configService.get('adminPrivateKey'),
       this.provider,
     );
-
     const contract = new ethers.Contract(contractAddress, contractAbi, sourceWallet);
-    const gasPrice = await this.provider.estimateGas(await contract.mint(
-      address,
-      this.convertToEther(Number(amount)),
-    ))
-    console.log(this.checkTransactionFee(gasPrice));
-    if (Number(await this.getUserNativeToken(address)) <= Number(await this.checkTransactionFee(gasPrice))) {
-      console.log('Not enough gas available');
-      return WalletStatus.NOT_ENOUGH_GAS;
-    }
     console.log('execute mint contract')
     const txResponse = await contract.mint(
       address,
@@ -136,18 +129,29 @@ export class WalletService {
     await tx.wait();
   }
   async getBalance(address: string) {
+    const user = await this.walletRepository.findOne({
+      where: {
+        address: address,
+      },
+    });
+    const userToken = Object(await this.tokens.get(user.userId));
+    const contractAddress = Object(userToken).contractAddress || this.contractAddress;
+    const contractAbi = Object(userToken).abi || this.abi;
     const contract = new ethers.Contract(
-      this.contractAddress,
-      this.abi,
+      contractAddress,
+      contractAbi,
       this.provider,
     );
     const balance = await contract.balanceOf(address);
     return Number(ethers.formatEther(balance));
   }
-  async getTokenSymbol() {
+  async getTokenSymbol(userId: string) {
+    const userToken = Object(await this.tokens.get(userId));
+    const contractAddress = Object(userToken).contractAddress || this.contractAddress;
+    const contractAbi = Object(userToken).abi || this.abi;
     const contract = new ethers.Contract(
-      this.contractAddress,
-      this.abi,
+      contractAddress,
+      contractAbi,
       this.provider,
     );
     const symbol = await contract.symbol();
@@ -155,10 +159,19 @@ export class WalletService {
   }
   async burn(amount: Uint256, privateKey: string) {
     try {
+
       const sourceWallet = new Wallet(privateKey, this.provider);
+      const user = await this.walletRepository.findOne({
+        where: {
+          address: sourceWallet.address,
+        },
+      });
+      const userToken = Object(await this.tokens.get(user.userId));
+      const contractAddress = Object(userToken).contractAddress || this.contractAddress;
+      const contractAbi = Object(userToken).abi || this.abi;
       const contract = new Contract(
-        this.contractAddress,
-        this.abi,
+        contractAddress,
+        contractAbi,
         sourceWallet,
       );
       const tx = await contract.burn(this.convertToEther(Number(amount)));
@@ -175,9 +188,17 @@ export class WalletService {
   async transfer(toAddress: string, amount: Uint256, privateKey: string) {
     try {
       const sourceWallet = new Wallet(privateKey, this.provider);
+      const user = await this.walletRepository.findOne({
+        where: {
+          address: sourceWallet.address,
+        },
+      });
+      const userToken = Object(await this.tokens.get(user.userId));
+      const contractAddress = Object(userToken).contractAddress || this.contractAddress;
+      const contractAbi = Object(userToken).abi || this.abi;
       const contract = new Contract(
-        this.contractAddress,
-        this.abi,
+        contractAddress,
+        contractAbi,
         sourceWallet,
       );
       const tx = await contract.transfer(

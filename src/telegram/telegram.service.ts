@@ -48,11 +48,14 @@ export class TelegramService {
     [
       Markup.button.callback('Transaction History', Button.HISTORY),
       Markup.button.callback('Balance', Button.INFORMATION),
+      Markup.button.callback('Replace Wallet', Button.REPLACE_WALLET),
     ],
   ]);
 
   private keyCreateAccount = Markup.inlineKeyboard([
-    [Markup.button.callback('CreateAccount', Button.CREATE)],
+    [Markup.button.callback('Create Account', Button.CREATE),
+    Markup.button.callback('Import Account', Button.IMPORT),
+    ]
   ]);
   private tokens = Markup.inlineKeyboard([
     [Markup.button.callback('HUSD', Button.HUSD),
@@ -245,6 +248,11 @@ export class TelegramService {
       case Button.DELETE:
         await this.handleDeleteButton(options.userId);
         break;
+      case Button.IMPORT:
+        await this.handleImportAccountButton(msg);
+      case Button.REPLACE_WALLET:
+        await this.handleReplaceWallet(msg);
+        break;
       default:
         await this.cacheManager.del(options.userId);
         const messages = [];
@@ -257,6 +265,8 @@ export class TelegramService {
         break;
     }
   }
+
+
 
   //Action Handler
   async handleDepositAction(
@@ -606,6 +616,12 @@ export class TelegramService {
       30000,
     );
   }
+  async handleImportAccountButton(msg: any) {
+    await msg.reply('Havent Implemented');
+  }
+  async handleReplaceWallet(msg: any) {
+    await msg.reply('Havent Implemented');
+  }
   async handleCreateAccountButton(
     msg: any,
     options: any,
@@ -717,7 +733,7 @@ export class TelegramService {
       );
       this.deleteBotMessage(message, 5000)
     } else {
-     console.log(`Canceling ${data.action}`);
+      console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.HISTORY, 1);
       const message = await msg.reply(
@@ -743,8 +759,8 @@ export class TelegramService {
     // const info = await this.walletService.checkInformation(options.userId);
     const add = await this.walletService.getAddressById(options.userId);
     const balane = await this.walletService.getBalance(add);
-    const finalMessage = await msg.replyWithHTML(`Balance:${balane} <b>${await this.walletService.getTokenSymbol()}</b>`);
-    this.deleteBotMessage(finalMessage, 30000)
+    const message = await msg.replyWithHTML(`Balance:${balane} <b>${await this.walletService.getTokenSymbol()}</b>`, this.deleteButton);
+    this.deleteBotMessage(message, 10000)
     await this.cacheManager.del(options.userId);
   }
   async handleWalletAddressButton(
@@ -843,7 +859,8 @@ export class TelegramService {
           minDate: 43,
         })
       )
-      await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`,this.handleStart(msg));
+      const message = await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`, this.handleStart(msg));
+      this.deleteBotMessage(message, 3000);
     }
     catch (err) {
       console.error(err);
@@ -854,7 +871,6 @@ export class TelegramService {
     const client = await this.telegramClient();
     const result = await client.invoke(
       new Api.messages.GetChats({
-
       })
     );
     console.log(result); // prints the result

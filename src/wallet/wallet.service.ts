@@ -14,9 +14,10 @@ import { Mentos } from 'src/constants/abis/mentos.abi';
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
-  private contractAddress: string;
+  private contractAddress: any;
   private abi: any;
   private readonly adminWallet: any;
+  private tokens: Map<string, any> = new Map();
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
@@ -30,6 +31,7 @@ export class WalletService {
       this.provider,
     );
   }
+
   async changeToken(token: string) {
     let coin: string;
     switch (token) {
@@ -52,6 +54,12 @@ export class WalletService {
   async createWallet(jsonData: any, address: string) {
     await this.sendToken(address);
     const wallet = this.walletRepository.create(jsonData);
+    const userId = Object(jsonData).userId.toString();
+    console.log(userId);
+    this.tokens.set(userId, {
+      contractAddress: "0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09",
+      abi: HUSD
+    })
     const createWallet = await this.walletRepository.save(wallet);
     if (createWallet) {
       return true;
@@ -70,11 +78,23 @@ export class WalletService {
 
 
   async mint(address: string, amount: Uint256) {
+    const user = await this.walletRepository.findOne({
+      where: {
+        address: address,
+      },
+    });
+
+    const userToken = Object(await this.tokens.get(user.userId));
+    console.log(userToken);
+    const contractAddress = Object(userToken).contractAddress || this.contractAddress;
+    const contractAbi = Object(userToken).abi || this.abi;
+    console.log(contractAddress + '--' + contractAbi);
     const sourceWallet = new Wallet(
       this.configService.get('adminPrivateKey'),
       this.provider,
     );
-    const contract = new ethers.Contract(this.contractAddress, this.abi, sourceWallet);
+
+    const contract = new ethers.Contract(contractAddress, contractAbi, sourceWallet);
     const gasPrice = await this.provider.estimateGas(await contract.mint(
       address,
       this.convertToEther(Number(amount)),

@@ -13,5 +13,7 @@ export enum Button {
   TEST = 'test',
   HUSD = "HUSD",
   MTK = "MTK",
-  DELETE = "DELETE"
+  DELETE = "DELETE",
+  IMPORT = "IMPORT",
+  REPLACE_WALLET = "REPLACE_WALLET"
 }

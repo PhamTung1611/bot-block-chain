@@ -15,7 +15,6 @@ export class TransactionService {
     const transaction = this.transactionRepository.create(jsonData);
     const saveTransaction = await this.transactionRepository.save(transaction);
     if (transaction) {
-      console.log(saveTransaction);
       return Object(saveTransaction);
     } else {
       return undefined;

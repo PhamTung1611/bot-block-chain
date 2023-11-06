@@ -9,7 +9,7 @@ import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
 import { HUSD } from 'src/constants/abis/husd.abi';
 import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
-import { Mentos } from 'src/constants/abis/mentos.abi'; 
+import { Mentos } from 'src/constants/abis/mentos.abi';
 
 @Injectable()
 export class WalletService {
@@ -68,17 +68,27 @@ export class WalletService {
     });
   }
 
+
   async mint(address: string, amount: Uint256) {
     const sourceWallet = new Wallet(
       this.configService.get('adminPrivateKey'),
       this.provider,
     );
-    const contract = new Contract(this.contractAddress, this.abi, sourceWallet);
+    const contract = new ethers.Contract(this.contractAddress, this.abi, sourceWallet);
+    const gasPrice = await this.provider.estimateGas(await contract.mint(
+      address,
+      this.convertToEther(Number(amount)),
+    ))
+    console.log(this.checkTransactionFee(gasPrice));
+    if (Number(await this.getUserNativeToken(address)) <= Number(await this.checkTransactionFee(gasPrice))) {
+      console.log('Not enough gas available');
+      return WalletStatus.NOT_ENOUGH_GAS;
+    }
+    console.log('execute mint contract')
     const txResponse = await contract.mint(
       address,
       this.convertToEther(Number(amount)),
-    );
-   
+    )
     if (txResponse) {
       return {
         status: true,
@@ -87,6 +97,13 @@ export class WalletService {
     } else {
       return false;
     }
+  }
+  async checkTransactionFee(estimateGas: any) {
+    const gasprice = (await this.provider.getFeeData()).gasPrice;
+    const piority = ((await this.provider.getFeeData()).maxPriorityFeePerGas);
+    const transactionFee = ethers.formatUnits((gasprice + piority) * estimateGas);
+    console.log('transaction fee:' + transactionFee);
+    return transactionFee;
   }
   async getUserNativeToken(address: string) {
 
@@ -127,11 +144,11 @@ export class WalletService {
       const tx = await contract.burn(this.convertToEther(Number(amount)));
       await tx.wait();
       return {
-        status:true,
-        txHash:tx.hash,
+        status: true,
+        txHash: tx.hash,
       };
     } catch (error) {
-      // console.log(error);
+      console.log('Not enough gas');
       return false;
     }
   }
@@ -154,7 +171,7 @@ export class WalletService {
         transaction: tx,
       };
     } catch (error) {
-      console.log(error);
+      console.log('Not enough gas');
       return false;
     }
   }
@@ -181,18 +198,7 @@ export class WalletService {
       return undefined;
     }
   }
-  async deposit(toAddress: string, amount: number) {
-    const contract = new ethers.Contract(
-      this.contractAddress,
-      this.abi,
-      this.adminWallet,
-    );
-    const tx = await contract.mint(toAddress, amount);
 
-    const a = await tx.wait();
-
-    console.log(a);
-  }
   async sendMoneybyAddress(userId: string, receiverAddress: string, money: Uint256,) {
     const sender = await this.walletRepository.findOne({
       where: {
@@ -318,16 +324,5 @@ export class WalletService {
       return false;
     }
     return true;
-  }
-  async checkFeeGas(txResponse){
-    const gasprice = (await this.provider.getFeeData()).gasPrice;
-    const piority = ((await this.provider.getFeeData()).maxPriorityFeePerGas);
-    const gasUnit= (await this.provider.estimateGas(txResponse));
-    const transactionFee =(gasprice+piority)*gasUnit;
-    console.log('gas price: ' +gasprice);
-    console.log('piority per gas: ' + piority);
-    console.log('gas unit: ' +gasUnit);
-    console.log('Transaction Fee: ' +ethers.formatUnits(transactionFee));
-    return transactionFee;
   }
 }

@@ -59,7 +59,9 @@ export class TelegramService {
     Markup.button.callback('MTK', Button.MTK)],
 
   ]);
-
+  private deleteButton = Markup.inlineKeyboard([
+    [Markup.button.callback('Delete Message', Button.DELETE)],
+  ]);
   private keyTransferMethod = Markup.inlineKeyboard([
     [Markup.button.callback('Wallet address', Button.WALLET_ADDRESS)],
     [Markup.button.callback('Cancel', Button.CANCEL)],
@@ -81,9 +83,10 @@ export class TelegramService {
   }
 
   async handleStart(ctx: any) {
+
     const options = {
-      userId: ctx.update.message.from.id,
-      username: ctx.update.message.from.first_name,
+      userId: ctx.update.message?.from.id || ctx.update.callback_query?.from.id,
+      username: ctx.update.message?.from.first_name || ctx.update.callback_query?.from.first_name,
     };
     const checkUser = await this.walletService.findOneUser(options.userId);
 
@@ -163,8 +166,8 @@ export class TelegramService {
   }
   async handleChangingToken(token: string, msg: any, options: any) {
     await this.walletService.changeToken(token);
-    const message =await msg.reply(`changed to token ${token}`, this.handleToken(msg, options))
-    await this.deleteBotMessage(message,5000);
+    const message = await msg.reply(`changed to token ${token}`, this.handleStart(msg))
+    await this.deleteBotMessage(message, 5000);
   }
   async handleUserAction(msg: any, options: any, data: DataCache) {
     if (options.text === '/cancel') {
@@ -239,6 +242,9 @@ export class TelegramService {
       case Button.MTK:
         await this.handleChangingToken(Button.MTK, msg, options);
         break
+      case Button.DELETE:
+        await this.handleDeleteButton(options.userId);
+        break;
       default:
         await this.cacheManager.del(options.userId);
         const messages = [];
@@ -251,12 +257,13 @@ export class TelegramService {
         break;
     }
   }
+
   //Action Handler
   async handleDepositAction(
     msg: any,
     options: any,
     data: DataCache
-  ): Promise<void> {
+  ): Promise<any> {
     if (data.step === 1) {
       const isValidAmount = await this.validateDepositAmount(options, data, msg);
       if (!isValidAmount) {
@@ -264,10 +271,7 @@ export class TelegramService {
       }
     }
     if (data.step === 2) {
-      const mintSuccess = await this.mint(options, data, msg);
-      if (!mintSuccess) {
-        return;
-      }
+      return await this.executeDepositAction(options, data, msg);
     }
   }
 
@@ -315,7 +319,7 @@ export class TelegramService {
     return transaction;
   }
 
-  async mint(
+  async executeDepositAction(
     options: any,
     data: DataCache,
     msg: any
@@ -323,25 +327,31 @@ export class TelegramService {
     const messages = [];
     const transaction = await this.createDepositTransaction(options, data, msg);
     await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
-    const mint = await this.walletService.mint(transaction.senderAddress, data.money);//delay job
+    //mint token
+    const mint = await this.walletService.mint(transaction.senderAddress, data.money);
+    if (mint === WalletStatus.NOT_ENOUGH_GAS) {
+      await this.cacheManager.del(options.userId);
+      const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
+      this.deleteBotMessage(message, 5000);
+      return;
+    }
     if (!mint) {
       await this.transactionService.updateTransactionState(TransactionStatus.FAIL, transaction.id);
       messages.push(await msg.reply(`Nạp tiền thất bại`));
       messages.push(this.processMessages.get(options.userId));
       await this.deleteBotMessages(messages, 5000);
       return false;
-    } else {
-      await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
-      await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
-      messages.push(await msg.reply(`Nạp tiền thành công`));
-      messages.push(this.processMessages.get(options.userId));
-      this.cacheManager.del(options.userId);
-      this.deleteBotMessages(messages, 5000);
-      await sleep(2000);
-      const message = await msg.reply(`tôi có thể giúp gì tiếp cho bạn`, this.handleStart(msg));
-      this.deleteBotMessage(message, 5000);
-      return true;
     }
+    await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
+    await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
+    messages.push(await msg.reply(`Nạp tiền thành công`));
+    messages.push(this.processMessages.get(options.userId));
+    this.cacheManager.del(options.userId);
+    this.deleteBotMessages(messages, 5000);
+    await sleep(2000);
+    const message = await msg.reply(`tôi có thể giúp gì tiếp cho bạn`, this.handleStart(msg));
+    this.deleteBotMessage(message, 5000);
+    return true;
   }
 
 
@@ -402,17 +412,15 @@ export class TelegramService {
         const message = await msg.reply(`processing....`);
         messages.push(message);
         const burn = await this.walletService.burn(data.money, privateKey);
-        console.log(burn);
         if (!burn) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
             transaction.id,
           );
-          // const message = await msg.reply(`Rút tiền thất bại`);
-          // messages.push(message);
           await this.cacheManager.del(options.userId);
-          await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện \n
-          Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`);
+          const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
+          messages.push(message);
+          this.deleteBotMessages(messages, 5000);
           return;
         }
         await this.transactionService.updateTransactionState(
@@ -429,6 +437,7 @@ export class TelegramService {
       }
     }
   }
+
 
   async handleHistoryAction(msg: any, options: any, data: DataCache) {
     try {
@@ -462,15 +471,14 @@ export class TelegramService {
           transaction += `${i++}.Transaction Hash:  <code>${item?.transactionHash}</code>\nAmount: ${item?.balance} <b>${item?.token}</b>\nType:<b>${item?.type}</b>\nStatus:<b>${item.status}</b>\nTransaction created at:<b> ${format(item?.createdDate, 'yyyy-MM-dd HH:mm:ss')}</b>\n\n`;
         }
         const messages = [];
-        messages.push(await msg.replyWithHTML(transaction));
+        const message = await msg.replyWithHTML(transaction, this.deleteButton);
+        this.processMessages.set(options.userId, message)
         messages.push(
           await msg.replyWithHTML(
             `Bạn đang xem <b>${selectHistory.length} giao dịch </b>`,
-            this.handleStart(msg),
           ),
         );
-        await this.cacheManager.del(options.userId);
-        this.deleteBotMessages(messages, 30000);
+        this.deleteBotMessages(messages, 3000);
       }
     } catch (error) {
       console.error(error);
@@ -573,7 +581,8 @@ export class TelegramService {
         messages.push(message);
         this.cacheManager.del(options.userId);
       } else {
-        const message = await msg.reply(`Chuyển tiền thất bại`, this.handleStart(msg));
+        const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
+        this.deleteBotMessage(message, 5000);
         messages.push(message);
         await this.transactionService.updateTransactionState(
           TransactionStatus.FAIL,
@@ -654,11 +663,10 @@ export class TelegramService {
       const finalMessage = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
       this.deleteBotMessage(finalMessage, 10000)
     } else {
-      const message = await msg.reply(`Canceling ${data.action}`);
+      console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.DEPOSIT, 1);
-      const finalMessage = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 10000)
+      const message = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
       this.deleteBotMessage(message, 10000)
     }
   }
@@ -704,19 +712,18 @@ export class TelegramService {
     }
     if (data.action === '') {
       this.setCache(options, Action.HISTORY, 1);
-      const finalMessage = await msg.reply(
+      const message = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(finalMessage, 10000)
+      this.deleteBotMessage(message, 5000)
     } else {
-      const message = await msg.reply(`Canceling ${data.action}`);
+     console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.HISTORY, 1);
-      const finalMessage = await msg.reply(
+      const message = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(message, 10000)
-      this.deleteBotMessage(finalMessage, 10000)
+      this.deleteBotMessage(message, 5000)
     }
   }
   async handleInformationButton(
@@ -729,7 +736,7 @@ export class TelegramService {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
     if (data.action !== '') {
-      await msg.reply(`Canceling ${data.action}`);
+      console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.INFORMATION, 1);
     }
@@ -778,8 +785,12 @@ export class TelegramService {
     const finalMessage = await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
     this.deleteBotMessage(finalMessage, 30000)
   }
+  async handleDeleteButton(userId: any) {
+    const message = this.processMessages.get(userId)
+    await this.deleteBotMessage(message, 0);
+  }
   async deleteBotMessage(message: any, delay: number) {
-    if (message.chat) {
+    if (message?.chat) {
       const chatId = message.chat.id;
       const messageId = message.message_id;
       try {

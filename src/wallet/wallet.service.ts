@@ -24,7 +24,7 @@ export class WalletService {
     private configService: ConfigService,
   ) {
     this.provider = new ethers.JsonRpcProvider(configService.get('RPC'));
-    this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09';
+    this.contractAddress = HUSDContractAddress;
     this.abi = HUSD;
     this.adminWallet = new Wallet(
       configService.get('adminPrivateKey'),
@@ -65,12 +65,6 @@ export class WalletService {
   async createWallet(jsonData: any, address: string) {
     await this.sendToken(address);
     const wallet = this.walletRepository.create(jsonData);
-    const userId = Object(jsonData).userId.toString();
-    console.log(userId);
-    this.tokens.set(userId, {
-      contractAddress: "0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09",
-      abi: HUSD
-    })
     const createWallet = await this.walletRepository.save(wallet);
     if (createWallet) {
       return true;
@@ -231,7 +225,7 @@ export class WalletService {
       privateKey: wallet.privateKey,
       publicKey: wallet.publicKey,
       address: wallet.address,
-      currentSelectToken: 'HUSD'
+      currentSelectToken: HUSDContractAddress.token
     };
   }
 

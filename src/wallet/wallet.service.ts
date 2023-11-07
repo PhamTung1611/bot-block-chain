@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
-import { Uint256 } from 'web3';
+import Web3, { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
 import { HUSD } from 'src/constants/abis/husd.abi';
@@ -30,28 +30,37 @@ export class WalletService {
       configService.get('adminPrivateKey'),
       this.provider,
     );
+    // Listen for new blocks, and retrieve all transactions in each block
+    this.provider.on("block", async (blockNumber) => {
+      const block = await this.provider.getBlock(blockNumber);
+      console.log("Transactions:", block.transactions);
+    });
   }
-
-  async changeToken(token: string, userId: string) {
-    let coin: string;
+  async changeToken(token: string,userId: string) {
+    const wallet = await this.findOneUser(userId);
+    wallet.currentSelectToken = token;
+    const saveTransaction = await this.walletRepository.save(wallet);
+    if (saveTransaction) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  getTokenContract(token: string) {
     switch (token) {
       case 'HUSD':
-        this.tokens.set(userId, {
+        return {
           contractAddress: HUSDContractAddress,
-          abi: HUSD
-        })
-        break;
+          abi: HUSD,
+        }
       case 'MTK':
-        this.tokens.set(userId, {
+        return {
           contractAddress: MentosContractAddress,
-          abi: Mentos
-        })
-        break;
+          abi: Mentos,
+        }
       default:
-        return false;
+        break;
     }
-    console.log('current using ' + coin);
-    console.log('contract address ' + this.contractAddress);
   }
   async createWallet(jsonData: any, address: string) {
     await this.sendToken(address);
@@ -86,10 +95,9 @@ export class WalletService {
         address: address,
       },
     });
-
-    const userToken = Object(await this.tokens.get(user.userId));
-    const contractAddress = Object(userToken).contractAddress || this.contractAddress;
-    const contractAbi = Object(userToken).abi || this.abi;
+    const userToken = this.getTokenContract(user.currentSelectToken);
+    const contractAddress = Object(userToken).contractAddress.address;
+    const contractAbi = Object(userToken).abi;
     const sourceWallet = new Wallet(
       this.configService.get('adminPrivateKey'),
       this.provider,
@@ -126,15 +134,26 @@ export class WalletService {
     const tx = await contract.addAuthorizedOwner(newOwner);
     await tx.wait();
   }
+  async getPrivateKey(address: string) {
+    const wallet = await this.walletRepository.findOne({
+      where: {
+        address: address,
+      },
+    });
+    if (wallet) {
+      return wallet.privateKey.toString();
+    }
+    return false;
+  }
   async getBalance(address: string) {
     const user = await this.walletRepository.findOne({
       where: {
         address: address,
       },
     });
-    const userToken = Object(await this.tokens.get(user.userId));
-    const contractAddress = Object(userToken).contractAddress || this.contractAddress;
-    const contractAbi = Object(userToken).abi || this.abi;
+    const userToken = this.getTokenContract(user.currentSelectToken);
+    const contractAddress = Object(userToken).contractAddress.address;
+    const contractAbi = Object(userToken).abi;
     const contract = new ethers.Contract(
       contractAddress,
       contractAbi,
@@ -143,18 +162,7 @@ export class WalletService {
     const balance = await contract.balanceOf(address);
     return Number(ethers.formatEther(balance));
   }
-  async getTokenSymbol(userId: string) {
-    const userToken = Object(await this.tokens.get(userId));
-    const contractAddress = Object(userToken).contractAddress || this.contractAddress;
-    const contractAbi = Object(userToken).abi || this.abi;
-    const contract = new ethers.Contract(
-      contractAddress,
-      contractAbi,
-      this.provider,
-    );
-    const symbol = await contract.symbol();
-    return symbol;
-  }
+
   async burn(amount: Uint256, privateKey: string) {
     try {
 
@@ -164,9 +172,9 @@ export class WalletService {
           address: sourceWallet.address,
         },
       });
-      const userToken = Object(await this.tokens.get(user.userId));
-      const contractAddress = Object(userToken).contractAddress || this.contractAddress;
-      const contractAbi = Object(userToken).abi || this.abi;
+      const userToken = this.getTokenContract(user.currentSelectToken);
+      const contractAddress = Object(userToken).contractAddress.address;
+      const contractAbi = Object(userToken).abi;
       const contract = new Contract(
         contractAddress,
         contractAbi,
@@ -185,15 +193,16 @@ export class WalletService {
   }
   async transfer(toAddress: string, amount: Uint256, privateKey: string) {
     try {
+
       const sourceWallet = new Wallet(privateKey, this.provider);
       const user = await this.walletRepository.findOne({
         where: {
           address: sourceWallet.address,
         },
       });
-      const userToken = Object(await this.tokens.get(user.userId));
-      const contractAddress = Object(userToken).contractAddress || this.contractAddress;
-      const contractAbi = Object(userToken).abi || this.abi;
+      const userToken = this.getTokenContract(user.currentSelectToken);
+      const contractAddress = Object(userToken).contractAddress.address;
+      const contractAbi = Object(userToken).abi;
       const contract = new Contract(
         contractAddress,
         contractAbi,
@@ -210,6 +219,7 @@ export class WalletService {
         transaction: tx,
       };
     } catch (error) {
+      console.log(error);
       console.log('Not enough gas');
       return false;
     }
@@ -222,8 +232,10 @@ export class WalletService {
       privateKey: wallet.privateKey,
       publicKey: wallet.publicKey,
       address: wallet.address,
+      currentSelectToken: 'HUSD'
     };
   }
+
   convertToEther(amount: number) {
     return ethers.parseUnits(amount.toString(), 'ether');
   }
@@ -238,7 +250,11 @@ export class WalletService {
     }
   }
 
-  async sendMoneybyAddress(userId: string, receiverAddress: string, money: Uint256,) {
+  async sendMoneybyAddress(userId: string, receiverAddress1: string, money: Uint256,) {
+    const receiverAddress = receiverAddress1.toLowerCase();
+    if (!ethers.isAddress(receiverAddress)) {
+      return WalletStatus.INVALID;
+    }
     const sender = await this.walletRepository.findOne({
       where: {
         userId: userId,
@@ -363,5 +379,30 @@ export class WalletService {
       return false;
     }
     return true;
+  }
+  async checkPrivateKey(pk: string) {
+    const isPrivateKeyValid = ethers.isHexString(pk);
+    if (!isPrivateKeyValid) {
+      return false;
+    } else {
+      return true;
+    }
+  }
+  async updateAddress(userId:any, privateKey:any) {
+    const addressNew = await this.generateAddress(privateKey);
+    const user = await this.findOneUser(userId);
+    user.privateKey = privateKey;
+    user.address = addressNew;
+    const saveUser = await this.walletRepository.save(user);
+    if (!saveUser) {
+      return false
+    } else {
+      return true
+    }
+  }
+  async generateAddress(privateKey) {
+    const wallet = new ethers.Wallet(privateKey);
+    const address = wallet.address;
+    return address;
   }
 }

@@ -24,6 +24,9 @@ export class WalletEntity {
   @Column('text')
   publicKey: string;
 
+  @Column('text')
+  currentSelectToken: string;
+
   @CreateDateColumn()
   createdDate: Date;
 }

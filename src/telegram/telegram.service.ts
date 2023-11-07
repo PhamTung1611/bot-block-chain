@@ -47,7 +47,7 @@ export class TelegramService {
     ],
     [
       Markup.button.callback('Transaction History', Button.HISTORY),
-      Markup.button.callback('Balance', Button.INFORMATION),
+      Markup.button.callback('Private Key', Button.PK),
       Markup.button.callback('Replace Wallet', Button.REPLACE_WALLET),
     ],
   ]);
@@ -93,16 +93,16 @@ export class TelegramService {
       username: ctx.update.message?.from.first_name || ctx.update.callback_query?.from.first_name,
     };
     const checkUser = await this.walletService.findOneUser(options.userId);
-
     if (!checkUser) {
       await ctx.replyWithHTML(
         `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Bạn chưa có tài khoản vui lòng tạo một tài khoản để tiếp tục`,
         this.keyCreateAccount,
       );
     } else {
+      const balance = await this.walletService.getBalance(checkUser.address)
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
-🪙Token Selected: ${await this.walletService.getTokenSymbol(options.userId)}\n    
+🪙Token Balance:<b> ${balance} ${checkUser.currentSelectToken}</b>\n     
 💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
 📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
@@ -157,7 +157,8 @@ export class TelegramService {
     }
   }
   async handleToken(msg: any, options: any) {
-    const tokenMenu = await msg.reply(`Current using ${await this.walletService.getTokenSymbol(options.userId)} token`, this.tokens);
+    const user = await this.walletService.findOneUser(options.userId);
+    const tokenMenu = await msg.reply(`Current using ${user.currentSelectToken} token`, this.tokens);
     const tokenInstances = this.tokenInstances.get(options.userId) || [];
     tokenInstances.push(tokenMenu);
     if (tokenInstances.length > 1) {
@@ -196,6 +197,9 @@ export class TelegramService {
       case Action.SEND_MONEY_ADDRESS:
         await this.handleSendMoneyAction(msg, options, data);
         break;
+      case Action.REPLACE_WALLET:
+        await this.handleReplaceWalletAction(msg, options, data)
+        break;
       default:
         this.cacheManager.del(options.userId);
         const message = await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
@@ -225,8 +229,8 @@ export class TelegramService {
       case Button.HISTORY:
         await this.handleHistoryButton(msg, options, data, checkUser);
         break;
-      case Button.INFORMATION:
-        await this.handleInformationButton(msg, options, data, checkUser);
+      case Button.PK:
+        await this.handlePrivateKeyButton(msg, options, data, checkUser);
         break;
       case Button.WALLET_ADDRESS:
         await this.handleWalletAddressButton(msg, options, data, checkUser);
@@ -247,12 +251,13 @@ export class TelegramService {
         await this.handleChangingToken(Button.MTK, msg, options);
         break
       case Button.DELETE:
-        await this.handleDeleteButton(options.userId);
+        await this.handleDeleteButton(msg);
         break;
       case Button.IMPORT:
         await this.handleImportAccountButton(msg);
+        break;
       case Button.REPLACE_WALLET:
-        await this.handleReplaceWallet(msg);
+        await this.handleReplaceWallet(msg, data, options, checkUser);
         break;
       case Button.IMPORT_TOKEN:
         await this.handleImportTokenButton(msg);
@@ -316,8 +321,9 @@ export class TelegramService {
     data: DataCache,
     msg: any
   ): Promise<any> {
+    const user = await this.walletService.findOneUser(options.userId);
     const address = await this.walletService.checkAddress(options.userId);
-    const token = await this.walletService.getTokenSymbol(options.userId);
+    const token = user.currentSelectToken;
     const defaultTxHash = 'Unavailable';
     const createTransaction = {
       transactionHash: String(defaultTxHash),
@@ -387,9 +393,9 @@ export class TelegramService {
       }
       if (data.step === 2) {
         await this.cacheManager.set(options.userId, data, 30000);
-
+        const user = await this.walletService.findOneUser(options.userId);
         const address = await this.walletService.checkAddress(options.userId);
-        const token = await this.walletService.getTokenSymbol(options.userId);
+        const token = user.currentSelectToken;
         const defaultTxHash = 'Unavailable';
         const createTransaction = {
           transactionHash: String(defaultTxHash),
@@ -483,7 +489,7 @@ export class TelegramService {
         }
         const messages = [];
         const message = await msg.replyWithHTML(transaction, this.deleteButton);
-        this.processMessages.set(options.userId, message)
+        this.processMessages.set(message.message_id, message)
         messages.push(
           await msg.replyWithHTML(
             `Bạn đang xem <b>${selectHistory.length} giao dịch </b>`,
@@ -493,6 +499,39 @@ export class TelegramService {
       }
     } catch (error) {
       console.error(error);
+    }
+  }
+
+  async handleReplaceWalletAction(msg: any, options: any, data: DataCache) {
+    if (data.action == Action.REPLACE_WALLET) {
+      const user = await this.walletService.findOneUser(options.userId);
+      const pk = msg.message.text
+      console.log(pk);
+      if (pk === user.privateKey) {
+        const finalMessage = await msg.reply('Bạn đang sử dụng ví này Vui lòng nhập lại. Để hủy nhập /cancel');
+        this.deleteBotMessage(finalMessage, 10000)
+        return;
+      }
+      const checkPrivateKey = await this.walletService.checkPrivateKey(pk);
+      if (!checkPrivateKey) {
+        const finalMessage = await msg.reply('Không đúng định dạng PrivateKey, Vui lòng nhập lại. Để hủy nhập /cancel');
+        this.deleteBotMessage(finalMessage, 10000)
+        this.handleStart(msg)
+   
+      } else {
+        const update = await this.walletService.updateAddress(options.userId, pk)
+        if (!update) {
+          const finalMessage = await msg.reply('Không thành công');
+          this.deleteBotMessage(finalMessage, 10000)
+          this.handleStart(msg)
+          await this.cacheManager.del(options.userId);
+        } else {
+          const finalMessage = await msg.reply('Thành công');
+          this.deleteBotMessage(finalMessage, 10000)
+          this.handleStart(msg)
+          await this.cacheManager.del(options.userId);
+        }
+      }
     }
   }
   async handleTransferByAddressAction(msg: any, options: any, data: DataCache) {
@@ -542,9 +581,10 @@ export class TelegramService {
         data.step = 2;
         await this.cacheManager.set(options.userId, data, 30000);
       }
+
       const receiver = data.receiver;
       const sender = await this.walletService.getAddressById(options.userId);
-      const token = await this.walletService.getTokenSymbol(options.userId);
+      const token = (await this.walletService.findOneUser(options.userId)).currentSelectToken;
       const defaultTxHash = 'Unavailable';
       const createTransaction = {
         balance: String(data.money),
@@ -585,7 +625,8 @@ export class TelegramService {
         );
         messages.push(message);
         this.cacheManager.del(options.userId);
-      } else if (checkStatus === WalletStatus.SELF) {
+      }
+      else if (checkStatus === WalletStatus.SELF) {
         const message = await msg.reply(
           `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`, this.handleStart(msg)
         );
@@ -623,8 +664,20 @@ export class TelegramService {
   async handleImportAccountButton(msg: any) {
     await msg.reply('Coming soon');
   }
-  async handleReplaceWallet(msg: any) {
-    await msg.reply('Coming soon');
+  async handleReplaceWallet(msg: any, data: any, options: any, checkUser: any) {
+    if (!checkUser) {
+      return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+    }
+    if (data.action === '') {
+      this.setCache(options, Action.REPLACE_WALLET, 1);
+      const finalMessage = await msg.replyWithHTML(`Vui lòng nhập privateKey của ví bạn muốn import`);
+      this.deleteBotMessage(finalMessage, 10000)
+    } else {
+      await this.cacheManager.del(options.userId);
+      this.setCache(options, Action.REPLACE_WALLET, 1);
+      const message = await msg.reply('Vui lòng nhập privateKey của ví bạn muốn import');
+      this.deleteBotMessage(message, 10000)
+    }
   }
   async handleCreateAccountButton(
     msg: any,
@@ -745,7 +798,7 @@ export class TelegramService {
       this.deleteBotMessage(message, 5000)
     }
   }
-  async handleInformationButton(
+  async handlePrivateKeyButton(
     msg: any,
     options: any,
     data: any,
@@ -760,10 +813,11 @@ export class TelegramService {
       this.setCache(options, Action.INFORMATION, 1);
     }
     // const info = await this.walletService.checkInformation(options.userId);
-    const add = await this.walletService.getAddressById(options.userId);
-    const balane = await this.walletService.getBalance(add);
-    const message = await msg.replyWithHTML(`Balance:${balane} <b>${await this.walletService.getTokenSymbol(options.userId)}</b>`, this.deleteButton);
-    this.deleteBotMessage(message, 10000)
+    const address = await this.walletService.getAddressById(options.userId);
+    const tempMessage = await msg.reply('🗝Here is your private key (Dont share it to others)')
+    const message = await msg.replyWithHTML(`<tg-spoiler> ${await this.walletService.getPrivateKey(address)} </tg-spoiler>`, this.deleteButton);
+    this.deleteBotMessage(tempMessage, 5000);
+    this.processMessages.set(message.message_id, message);
     await this.cacheManager.del(options.userId);
   }
   async handleWalletAddressButton(
@@ -804,8 +858,9 @@ export class TelegramService {
     const finalMessage = await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
     this.deleteBotMessage(finalMessage, 30000)
   }
-  async handleDeleteButton(userId: any) {
-    const message = this.processMessages.get(userId)
+  async handleDeleteButton(msg: any) {
+    const messageId = msg.update.callback_query.message.message_id
+    const message = this.processMessages.get(messageId)
     await this.deleteBotMessage(message, 0);
   }
   async deleteBotMessage(message: any, delay: number) {
@@ -862,6 +917,7 @@ export class TelegramService {
           minDate: 43,
         })
       )
+
       const message = await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`, this.handleStart(msg));
       this.deleteBotMessage(message, 3000);
     }
@@ -870,13 +926,7 @@ export class TelegramService {
       await msg.reply(`Some thing went wrong`);
     }
   }
-  async getAllChatIds() {
-    const client = await this.telegramClient();
-    const result = await client.invoke(
-      new Api.messages.GetChats({
-      })
-    );
-    console.log(result); // prints the result
-  }
-}
 
+
+
+}

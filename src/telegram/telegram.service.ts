@@ -250,6 +250,7 @@ export class TelegramService {
         break;
       case Button.IMPORT:
         await this.handleImportAccountButton(msg);
+        break;
       case Button.REPLACE_WALLET:
         await this.handleReplaceWallet(msg);
         break;

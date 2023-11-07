@@ -195,6 +195,9 @@ export class TelegramService {
       case Action.SEND_MONEY_ADDRESS:
         await this.handleSendMoneyAction(msg, options, data);
         break;
+      case Action.REPLACE_WALLET:
+        await this.handleReplaceWalletAction(msg, options, data)
+        break;
       default:
         this.cacheManager.del(options.userId);
         const message = await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
@@ -251,7 +254,7 @@ export class TelegramService {
       case Button.IMPORT:
         await this.handleImportAccountButton(msg);
       case Button.REPLACE_WALLET:
-        await this.handleReplaceWallet(msg);
+        await this.handleReplaceWallet(msg, data, options, checkUser);
         break;
       default:
         await this.cacheManager.del(options.userId);
@@ -494,6 +497,34 @@ export class TelegramService {
       console.error(error);
     }
   }
+
+  async handleReplaceWalletAction(msg: any, options: any, data: DataCache) {
+    if (data.action == Action.REPLACE_WALLET) {
+      // console.log(1,msg);
+      const pk = msg.message.text
+      console.log(pk);
+      const checkPrivateKey = await this.walletService.checkPrivateKey(pk);
+      if (!checkPrivateKey) {
+        const finalMessage = await msg.reply('Không đúng định dạng PrivateKey');
+        this.deleteBotMessage(finalMessage, 10000)
+        this.handleStart(msg)
+        await this.cacheManager.del(options.userId);
+      } else {
+        const update = await this.walletService.updateAddress(options.userId, pk)
+        if (!update) {
+          const finalMessage = await msg.reply('Không thành công');
+        this.deleteBotMessage(finalMessage, 10000)
+        this.handleStart(msg)
+          await this.cacheManager.del(options.userId);
+        }else{
+          const finalMessage = await msg.reply('Thành công');
+        this.deleteBotMessage(finalMessage, 10000)
+        this.handleStart(msg)
+          await this.cacheManager.del(options.userId);
+        }
+      }
+    }
+  }
   async handleTransferByAddressAction(msg: any, options: any, data: DataCache) {
     const messages = [];
     if (data.step === 1) {
@@ -619,8 +650,20 @@ export class TelegramService {
   async handleImportAccountButton(msg: any) {
     await msg.reply('Havent Implemented');
   }
-  async handleReplaceWallet(msg: any) {
-    await msg.reply('Havent Implemented');
+  async handleReplaceWallet(msg: any, data: any, options: any, checkUser: any) {
+    if (!checkUser) {
+      return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+    }
+    if (data.action === '') {
+      this.setCache(options, Action.REPLACE_WALLET, 1);
+      const finalMessage = await msg.reply('Vui lòng nhập privateKey của bạn');
+      this.deleteBotMessage(finalMessage, 10000)
+    } else {
+      await this.cacheManager.del(options.userId);
+      this.setCache(options, Action.REPLACE_WALLET, 1);
+      const message = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
+      this.deleteBotMessage(message, 10000)
+    }
   }
   async handleCreateAccountButton(
     msg: any,

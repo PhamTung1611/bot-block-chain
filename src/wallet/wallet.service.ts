@@ -345,4 +345,33 @@ export class WalletService {
     }
     return true;
   }
+  async checkPrivateKey(pk:string){
+    const isPrivateKeyValid = ethers.isHexString(pk);
+    console.log(isPrivateKeyValid);
+   if(!isPrivateKeyValid){
+    return false;
+   }else{
+    return true;
+   }
+        
+  }
+  async updateAddress(userId,privateKey){
+    const addressNew = await this.generateAddress(privateKey);
+    const user = await this.findOneUser(userId);
+    user.privateKey = privateKey;
+    user.address=addressNew;
+    const saveUser = await this.walletRepository.save(user);
+    if(!saveUser){
+      return false
+    }else{
+      return true
+    }
+    
+
+  }
+  async generateAddress(privateKey){
+    const wallet = new ethers.Wallet(privateKey);
+    const address = wallet.address;
+    return address;
+  }
 }

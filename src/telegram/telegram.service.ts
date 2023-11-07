@@ -60,6 +60,7 @@ export class TelegramService {
   private tokens = Markup.inlineKeyboard([
     [Markup.button.callback('HUSD', Button.HUSD),
     Markup.button.callback('MTK', Button.MTK)],
+    [Markup.button.callback('Import Token', Button.IMPORT_TOKEN),]
 
   ]);
   private deleteButton = Markup.inlineKeyboard([
@@ -168,7 +169,7 @@ export class TelegramService {
     this.tokenInstances.set(options.userId, tokenInstances);
   }
   async handleChangingToken(token: string, msg: any, options: any) {
-    await this.walletService.changeToken(token,options.userId);
+    await this.walletService.changeToken(token, options.userId);
     const message = await msg.reply(`changed to token ${token}`, this.handleStart(msg))
     await this.deleteBotMessage(message, 5000);
   }
@@ -253,6 +254,9 @@ export class TelegramService {
       case Button.REPLACE_WALLET:
         await this.handleReplaceWallet(msg);
         break;
+      case Button.IMPORT_TOKEN:
+        await this.handleImportTokenButton(msg);
+        break;
       default:
         await this.cacheManager.del(options.userId);
         const messages = [];
@@ -265,6 +269,7 @@ export class TelegramService {
         break;
     }
   }
+
 
 
 
@@ -347,7 +352,7 @@ export class TelegramService {
       await this.deleteBotMessages(messages, 5000);
       return false;
     }
-    
+
     await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
     await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
     messages.push(await msg.reply(`Nạp tiền thành công`));
@@ -612,11 +617,14 @@ export class TelegramService {
       30000,
     );
   }
+  async handleImportTokenButton(msg: any) {
+    await msg.reply('Coming soon');
+  }
   async handleImportAccountButton(msg: any) {
-    await msg.reply('Havent Implemented');
+    await msg.reply('Coming soon');
   }
   async handleReplaceWallet(msg: any) {
-    await msg.reply('Havent Implemented');
+    await msg.reply('Coming soon');
   }
   async handleCreateAccountButton(
     msg: any,
@@ -640,7 +648,6 @@ export class TelegramService {
           },
           wallet.address,
         );
-
         if (data) {
           messages.push(await msg.reply(
             `Tạo tài khoản thành công!`,

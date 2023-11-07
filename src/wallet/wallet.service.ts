@@ -34,19 +34,16 @@ export class WalletService {
 
   async changeToken(token: string, userId: string) {
     let coin: string;
-    const user = await this.walletRepository.findOneBy({
-      userId: userId
-    });
     switch (token) {
       case 'HUSD':
         this.tokens.set(userId, {
-          contractAddress: '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09',
+          contractAddress: HUSDContractAddress,
           abi: HUSD
         })
         break;
       case 'MTK':
         this.tokens.set(userId, {
-          contractAddress: '0x1D4887765d8bd4Db87688545936ba03a541b9E71',
+          contractAddress: MentosContractAddress,
           abi: Mentos
         })
         break;
@@ -61,8 +58,9 @@ export class WalletService {
     const wallet = this.walletRepository.create(jsonData);
     const userId = Object(jsonData).userId.toString();
     console.log(userId);
+    //Set default token to new user
     this.tokens.set(userId, {
-      contractAddress: "0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09",
+      contractAddress:HUSDContractAddress,
       abi: HUSD
     })
     const createWallet = await this.walletRepository.save(wallet);

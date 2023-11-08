@@ -26,13 +26,15 @@ import { StringSession } from "telegram/sessions";
 import input from "input";
 import { botCommand } from 'src/constants/commands/telegram.commands';
 import { sleep } from 'telegram/Helpers';
+import { message } from 'telegram/client';
 @Injectable()
 export class
   TelegramService {
   // Create an array to store messages for each user
-  private startInstances: Map<number, string[]> = new Map();
+  private startInstances: Map<number, any[]> = new Map();
   private tokenInstances: Map<number, string[]> = new Map();
   private processMessages: Map<number, string> = new Map();
+  private balanceStorages: Map<number, number> = new Map();
   private apiId = Number(this.configService.get('api_id'));
   private apiHash = this.configService.get('api_hash');
   private stringSession = new StringSession(this.configService.get('string_session'));
@@ -81,7 +83,45 @@ export class
     this.bot.action(/.*/, this.handleButton.bind(this));
     this.bot.telegram.setMyCommands(botCommand);
     this.bot.launch();
+  }
+  async checkAndBalanceMessage(userId: string, msg: any) {
+    const user = await this.walletService.findOneUser(userId);
+    if (!user) return;
+    const balance = await this.walletService.getBalance(user.address)
+    if(balance === this.balanceStorages.get(Number(userId)))
+    {
+      return;
+    }
+    this.balanceStorages.set(Number(userId),balance);
+    const nativeToken = await this.walletService.getUserNativeToken(user.address)
+    const messageId = this.startInstances.get(Number(userId))?.[0]?.message_id;
 
+    const updatedMessage = `Xin chào <a href="tg://user?id=${userId}">@${user.username}</a>!!\n💳Địa chỉ wallet!\n<code>${user.address}</code>\n
+  🪙Token Balance:<b> ${balance} ${user.currentSelectToken}</b>\n     
+  💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
+  📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
+  🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`;
+
+    if (messageId) {
+      console.log('update balance:' + balance);
+      await this.bot.telegram.editMessageText(msg.chat.id, messageId, '', updatedMessage, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              Markup.button.callback('Deposit', Button.DEPOSIT),
+              Markup.button.callback('Withdraw', Button.WITHDRAW),
+              Markup.button.callback('Transfer', Button.WALLET_ADDRESS),
+            ],
+            [
+              Markup.button.callback('Transaction History', Button.HISTORY),
+              Markup.button.callback('Private Key', Button.PK),
+              Markup.button.callback('Replace Wallet', Button.REPLACE_WALLET),
+            ],
+          ],
+        },
+      });
+    }
   }
 
   async handleStart(ctx: any) {
@@ -97,9 +137,10 @@ export class
       );
     } else {
       const balance = await this.walletService.getBalance(checkUser.address)
+      this.balanceStorages.set(options.userId, balance);
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
-🪙Token Balance:<b> ${balance} ${checkUser.currentSelectToken}</b>\n     
+🪙Token Balance: ${balance}<b> ${checkUser.currentSelectToken}</b>\n     
 💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
 📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
@@ -112,9 +153,17 @@ export class
         console.log(`Delete start instance of user ${options.userId}`);
       }
       this.startInstances.set(options.userId, startInstances);
+      // Start balance check every 5 seconds 
+      setInterval(() => {
+        // Get all user IDs
+        const userIds = this.startInstances.keys();
+        // Check balance for each user
+        for (const userId of userIds) {
+          this.checkAndBalanceMessage(userId.toString(), startInstances[0]);
+        }
+      }, 5000);
     }
   }
-
 
   async handleMessage(msg: any) {
     const options = {
@@ -357,8 +406,8 @@ export class
     const transaction = await this.createDepositTransaction(options, data, msg);
     await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
     //mint token
-    const mint = await this.walletService.mint(transaction.senderAddress, data.money);
-
+    const mint = await this.walletService.mint(transaction, data.money);
+    console.log(mint.returnValue)
     if (!mint) {
       await this.transactionService.updateTransactionState(TransactionStatus.FAIL, transaction.id);
       messages.push(await msg.reply(`Nạp tiền thất bại`));
@@ -368,12 +417,10 @@ export class
     }
 
     await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
-    await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
     messages.push(await msg.reply(`Nạp tiền thành công`));
     messages.push(this.processMessages.get(options.userId));
     this.cacheManager.del(options.userId);
     this.deleteBotMessages(messages, 5000);
-    await sleep(2000);
     const message = await msg.reply(`tôi có thể giúp gì tiếp cho bạn`, this.handleStart(msg));
     this.deleteBotMessage(message, 5000);
     return true;
@@ -434,7 +481,7 @@ export class
         );
         const message = await msg.reply(`processing....`);
         messages.push(message);
-        const burn = await this.walletService.burn(data.money, privateKey);
+        const burn = await this.walletService.burn(data.money, privateKey, transaction);
         if (!burn) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
@@ -451,7 +498,6 @@ export class
           transaction.id,
         );
         console.log(Object(burn).txHash);
-        await this.transactionService.updateTransactionHash(Object(burn).txHash, transaction.id);
         await this.cacheManager.del(options.userId);
         const message1 = await msg.reply(`Rút tiền thành công`, this.handleStart(msg));
         messages.push(message1);
@@ -606,12 +652,13 @@ export class
         options.userId,
         receiver,
         money,
+        transaction
       );
       await this.transactionService.updateTransactionState(
         TransactionStatus.PENDING,
         transaction.id,
       );
-      if (Object(checkStatus).status === TransactionStatus.SUCCESS && data.step === 2) {
+      if (checkStatus === TransactionStatus.SUCCESS && data.step === 2) {
         await this.transactionService.updateTransactionState(
           TransactionStatus.SUCCESS,
           transaction.id,
@@ -901,7 +948,7 @@ export class
   async handleDeleteButton(msg: any) {
     const messageId = msg.update.callback_query?.message.message_id || msg.update.message?.message_id;
     const message = this.processMessages.get(messageId)
-    console.log('Deleting message id='+messageId);
+    console.log('Deleting message id=' + messageId);
     await this.deleteBotMessage(message, 0);
   }
   async deleteBotMessage(message: any, delay: number) {

@@ -10,16 +10,18 @@ import { ConfigService } from '@nestjs/config';
 import { HUSD } from 'src/constants/abis/husd.abi';
 import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
 import { Mentos } from 'src/constants/abis/mentos.abi';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue, QueueEvents } from 'bullmq';
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
   private contractAddress: any;
   private abi: any;
   private readonly adminWallet: any;
-  private tokens: Map<string, any> = new Map();
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
+    @InjectQueue('wallet:optimize') private readonly walletQueue: Queue,
     private configService: ConfigService,
   ) {
     this.provider = new ethers.JsonRpcProvider(configService.get('RPC'));
@@ -29,11 +31,6 @@ export class WalletService {
       configService.get('adminPrivateKey'),
       this.provider,
     );
-    // Listen for new blocks, and retrieve all transactions in each block
-    this.provider.on("block", async (blockNumber) => {
-      const block = await this.provider.getBlock(blockNumber);
-      console.log("Transactions:", block.transactions);
-    });
   }
   async changeToken(token: string, userId: string) {
     const wallet = await this.findOneUser(userId);
@@ -81,33 +78,10 @@ export class WalletService {
   }
 
 
-  async mint(address: string, amount: Uint256) {
-    const user = await this.walletRepository.findOne({
-      where: {
-        address: address,
-      },
-    });
-    const userToken = this.getTokenContract(user.currentSelectToken);
-    const contractAddress = Object(userToken).contractAddress.address;
-    const contractAbi = Object(userToken).abi;
-    const sourceWallet = new Wallet(
-      this.configService.get('adminPrivateKey'),
-      this.provider,
-    );
-    const contract = new ethers.Contract(contractAddress, contractAbi, sourceWallet);
-    console.log('execute mint contract')
-    const txResponse = await contract.mint(
-      address,
-      this.convertToEther(Number(amount)),
-    )
-    if (txResponse) {
-      return {
-        status: true,
-        txhash: txResponse.hash
-      };
-    } else {
-      return false;
-    }
+  async mint(transaction: any, amount: Uint256):Promise<any> {
+    console.log('add mint to queue');
+    const job = await this.walletQueue.add('mint-token', { transaction, amount });
+    return job;
   }
   async checkTransactionFee(estimateGas: any) {
     const gasprice = (await this.provider.getFeeData()).gasPrice;
@@ -155,66 +129,22 @@ export class WalletService {
     return Number(ethers.formatEther(balance));
   }
 
-  async burn(amount: Uint256, privateKey: string) {
-    try {
-
-      const sourceWallet = new Wallet(privateKey, this.provider);
-      const user = await this.walletRepository.findOne({
-        where: {
-          address: sourceWallet.address,
-        },
-      });
-      const userToken = this.getTokenContract(user.currentSelectToken);
-      const contractAddress = Object(userToken).contractAddress.address;
-      const contractAbi = Object(userToken).abi;
-      const contract = new Contract(
-        contractAddress,
-        contractAbi,
-        sourceWallet,
-      );
-      const tx = await contract.burn(this.convertToEther(Number(amount)));
-      await tx.wait();
-      return {
-        status: true,
-        txHash: tx.hash,
-      };
-    } catch (error) {
-      console.log('Not enough gas');
-      return false;
-    }
+  async burn(amount: Uint256, privateKey: string,transaction:any) {
+    const job = await this.walletQueue.add('burn-token', {
+      amount,
+      privateKey,
+      transaction,
+    });
+    return job;
   }
-  async transfer(toAddress: string, amount: Uint256, privateKey: string) {
-    try {
-
-      const sourceWallet = new Wallet(privateKey, this.provider);
-      const user = await this.walletRepository.findOne({
-        where: {
-          address: sourceWallet.address,
-        },
-      });
-      const userToken = this.getTokenContract(user.currentSelectToken);
-      const contractAddress = Object(userToken).contractAddress.address;
-      const contractAbi = Object(userToken).abi;
-      const contract = new Contract(
-        contractAddress,
-        contractAbi,
-        sourceWallet,
-      );
-      const tx = await contract.transfer(
-        toAddress,
-        this.convertToEther(Number(amount)),
-      );
-      tx.nonce++;
-      console.log(tx.hash);
-      return {
-        status: true,
-        transaction: tx,
-      };
-    } catch (error) {
-      console.log(error);
-      console.log('Not enough gas');
-      return false;
-    }
+  async transfer(toAddress: string, amount: Uint256, privateKey: string,transaction:any) {
+    const job = await this.walletQueue.add('transfer', {
+      toAddress,
+      amount,
+      privateKey,
+      transaction
+    });
+    return job;
   }
   async generateWalletFromPrivateKey(privateKey: any) {
     const checkPk = await this.checkPrivateKey(privateKey);
@@ -252,7 +182,7 @@ export class WalletService {
     }
   }
 
-  async sendMoneybyAddress(userId: string, receiverAddress1: string, money: Uint256,) {
+  async sendMoneybyAddress(userId: string, receiverAddress1: string, money: Uint256,transaction:any) {
     const receiverAddress = receiverAddress1.toLowerCase();
     if (!ethers.isAddress(receiverAddress)) {
       return WalletStatus.INVALID;
@@ -272,6 +202,7 @@ export class WalletService {
       receiverAddress,
       money,
       privateKey,
+      transaction,
     );
     if (!checkTransaction) {
       return TransactionStatus.FAIL;
@@ -285,10 +216,8 @@ export class WalletService {
     if (!checkTransaction) {
       return TransactionStatus.FAIL;
     }
-    return {
-      status: TransactionStatus.SUCCESS,
-      txHash: checkTransaction.transaction.hash,
-    };
+    return TransactionStatus.SUCCESS
+
   }
   async withdrawn(userId: string, money: number) {
     const user = await this.walletRepository.findOne({
@@ -375,7 +304,7 @@ export class WalletService {
     const checkPk = await this.walletRepository.findOne({
       where: { privateKey: privateKey },
     });
-    if(!checkPk){
+    if (!checkPk) {
       const user = await this.findOneUser(userId);
       user.privateKey = privateKey;
       user.address = addressNew;
@@ -385,10 +314,10 @@ export class WalletService {
       } else {
         return true
       }
-    }else{
+    } else {
       return false
     }
-   
+
   }
   async generateAddress(privateKey) {
     const wallet = new ethers.Wallet(privateKey);

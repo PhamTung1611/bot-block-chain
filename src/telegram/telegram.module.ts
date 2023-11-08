@@ -7,10 +7,15 @@ import { TransactionEntity } from 'src/transaction/transaction.entity';
 import { WalletEntity } from 'src/wallet/wallet.entity';
 import { TransactionModule } from 'src/transaction/transaction.module';
 import { WalletModule } from 'src/wallet/wallet.module';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([TransactionEntity, WalletEntity]),
+    BullModule.registerQueue({
+      name: 'wallet:optimize',
+      prefix: 'telegram-bot',
+    }),
     CacheModule.register(),
     TransactionModule,
     WalletModule,

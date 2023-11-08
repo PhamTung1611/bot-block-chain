@@ -88,16 +88,15 @@ export class
     const user = await this.walletService.findOneUser(userId);
     if (!user) return;
     const balance = await this.walletService.getBalance(user.address)
-    if(balance === this.balanceStorages.get(Number(userId)))
-    {
+    if (balance === this.balanceStorages.get(Number(userId))) {
       return;
     }
-    this.balanceStorages.set(Number(userId),balance);
+    this.balanceStorages.set(Number(userId), balance);
     const nativeToken = await this.walletService.getUserNativeToken(user.address)
     const messageId = this.startInstances.get(Number(userId))?.[0]?.message_id;
 
     const updatedMessage = `Xin chào <a href="tg://user?id=${userId}">@${user.username}</a>!!\n💳Địa chỉ wallet!\n<code>${user.address}</code>\n
-  🪙Token Balance:<b> ${balance} ${user.currentSelectToken}</b>\n     
+  🪙Token Balance:<b> ${balance} ${user.currentSelectToken}</b> (updated at ${format(Date.now(), 'HH:mm:ss')}) \n     
   💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
   📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
   🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`;
@@ -140,7 +139,7 @@ export class
       this.balanceStorages.set(options.userId, balance);
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
-🪙Token Balance: ${balance}<b> ${checkUser.currentSelectToken}</b>\n     
+🪙Token Balance:<b> ${balance} ${checkUser.currentSelectToken}</b>\n     
 💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
 📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
@@ -161,7 +160,7 @@ export class
         for (const userId of userIds) {
           this.checkAndBalanceMessage(userId.toString(), startInstances[0]);
         }
-      }, 5000);
+      }, 1000);
     }
   }
 
@@ -556,6 +555,7 @@ export class
   async handleReplaceWalletAction(msg: any, options: any, data: DataCache) {
     const user = await this.walletService.findOneUser(options.userId);
     const pk = msg.message.text
+    console.log(msg.update.message);
     console.log(pk);
     if (pk === user.privateKey) {
       const finalMessage = await msg.reply('Bạn đang sử dụng ví này Vui lòng nhập lại. Để hủy nhập /cancel');
@@ -597,6 +597,7 @@ export class
         await this.deleteBotMessages(messages, 5000)
         return;
       }
+
       if (data.action === Action.TRANSFER_BY_ADDRESS) {
         data.action = Action.SEND_MONEY_ADDRESS;
         data.step = 3;
@@ -1005,7 +1006,7 @@ export class
           minDate: 43,
         })
       )
-
+      
       const message = await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`, this.handleStart(msg));
       this.deleteBotMessage(message, 3000);
     }

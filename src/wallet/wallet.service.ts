@@ -78,7 +78,7 @@ export class WalletService {
   }
 
 
-  async mint(transaction: any, amount: Uint256):Promise<any> {
+  async mint(transaction: any, amount: Uint256): Promise<any> {
     console.log('add mint to queue');
     const job = await this.walletQueue.add('mint-token', { transaction, amount });
     return job;
@@ -129,7 +129,7 @@ export class WalletService {
     return Number(ethers.formatEther(balance));
   }
 
-  async burn(amount: Uint256, privateKey: string,transaction:any) {
+  async burn(amount: Uint256, privateKey: string, transaction: any) {
     const job = await this.walletQueue.add('burn-token', {
       amount,
       privateKey,
@@ -137,7 +137,7 @@ export class WalletService {
     });
     return job;
   }
-  async transfer(toAddress: string, amount: Uint256, privateKey: string,transaction:any) {
+  async transfer(toAddress: string, amount: Uint256, privateKey: string, transaction: any) {
     const job = await this.walletQueue.add('transfer', {
       toAddress,
       amount,
@@ -147,15 +147,20 @@ export class WalletService {
     return job;
   }
   async generateWalletFromPrivateKey(privateKey: any) {
-    const checkPk = await this.checkPrivateKey(privateKey);
-    const checkPkExist = await this.walletRepository.findOne({
-      where: { privateKey: privateKey },
-    });
-    if (!checkPk || checkPkExist) {
+    try {
+      const checkPk = await this.checkPrivateKey(privateKey);
+      const checkPkExist = await this.walletRepository.findOne({
+        where: { privateKey: privateKey },
+      });
+      if (!checkPk || checkPkExist) {
+        return undefined;
+      }
+      const wallet = new ethers.Wallet(privateKey, this.provider);
+      return wallet.address;
+    } catch (err) {
+      console.log('invalid private key')
       return undefined;
     }
-    const wallet = new ethers.Wallet(privateKey, this.provider);
-    return wallet.address;
   }
   async generateNewWallet() {
     const wallet = ethers.Wallet.createRandom();
@@ -182,7 +187,7 @@ export class WalletService {
     }
   }
 
-  async sendMoneybyAddress(userId: string, receiverAddress1: string, money: Uint256,transaction:any) {
+  async sendMoneybyAddress(userId: string, receiverAddress1: string, money: Uint256, transaction: any) {
     const receiverAddress = receiverAddress1.toLowerCase();
     if (!ethers.isAddress(receiverAddress)) {
       return WalletStatus.INVALID;
@@ -292,11 +297,12 @@ export class WalletService {
     return true;
   }
   async checkPrivateKey(pk: string) {
-    const isPrivateKeyValid = ethers.isHexString(pk);
-    if (!isPrivateKeyValid) {
-      return false;
-    } else {
-      return true;
+    try {
+       ethers.isHexString(pk);
+    }
+    catch (err) {
+      console.error('invalid private key');
+      return undefined;
     }
   }
   async updateAddress(userId: any, privateKey: any) {

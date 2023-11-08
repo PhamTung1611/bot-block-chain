@@ -54,8 +54,8 @@ export class
   ]);
 
   private keyCreateAccount = Markup.inlineKeyboard([
-    [Markup.button.callback('Create Account', Button.CREATE),
-    Markup.button.callback('Import Account', Button.IMPORT),
+    [Markup.button.callback('Create Wallet', Button.CREATE),
+    Markup.button.callback('Import Wallet', Button.IMPORT),
     ]
   ]);
   private tokens = Markup.inlineKeyboard([
@@ -95,7 +95,7 @@ export class
     const checkUser = await this.walletService.findOneUser(options.userId);
     if (!checkUser) {
       await ctx.replyWithHTML(
-        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Bạn chưa có tài khoản vui lòng tạo một tài khoản hoặc import ví của bạn vào để tiếp tục`,
+        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Hãy chọn hành động tạo ví mới hoặc import ví của bạn để tiếp tục`,
         this.keyCreateAccount,
       );
     } else {

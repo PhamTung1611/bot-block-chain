@@ -218,7 +218,10 @@ export class WalletService {
   }
   async generateWalletFromPrivateKey(privateKey: any) {
     const checkPk = await this.checkPrivateKey(privateKey);
-    if (!checkPk) {
+    const checkPkExist = await this.walletRepository.findOne({
+      where: { privateKey: privateKey },
+    });
+    if (!checkPk || checkPkExist) {
       return undefined;
     }
     const wallet = new ethers.Wallet(privateKey, this.provider);

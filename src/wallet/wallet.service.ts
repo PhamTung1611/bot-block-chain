@@ -383,15 +383,23 @@ export class WalletService {
   }
   async updateAddress(userId:any, privateKey:any) {
     const addressNew = await this.generateAddress(privateKey);
-    const user = await this.findOneUser(userId);
-    user.privateKey = privateKey;
-    user.address = addressNew;
-    const saveUser = await this.walletRepository.save(user);
-    if (!saveUser) {
+    const checkPk = await this.walletRepository.findOne({
+      where: { privateKey: privateKey },
+    });
+    if(!checkPk){
+      const user = await this.findOneUser(userId);
+      user.privateKey = privateKey;
+      user.address = addressNew;
+      const saveUser = await this.walletRepository.save(user);
+      if (!saveUser) {
+        return false
+      } else {
+        return true
+      }
+    }else{
       return false
-    } else {
-      return true
     }
+   
   }
   async generateAddress(privateKey) {
     const wallet = new ethers.Wallet(privateKey);

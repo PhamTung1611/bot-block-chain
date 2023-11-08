@@ -10,7 +10,6 @@ import { ConfigService } from '@nestjs/config';
 import { HUSD } from 'src/constants/abis/husd.abi';
 import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
 import { Mentos } from 'src/constants/abis/mentos.abi';
-
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
@@ -36,7 +35,7 @@ export class WalletService {
       console.log("Transactions:", block.transactions);
     });
   }
-  async changeToken(token: string,userId: string) {
+  async changeToken(token: string, userId: string) {
     const wallet = await this.findOneUser(userId);
     wallet.currentSelectToken = token;
     const saveTransaction = await this.walletRepository.save(wallet);
@@ -217,13 +216,20 @@ export class WalletService {
       return false;
     }
   }
+  async generateWalletFromPrivateKey(privateKey: any) {
+    const checkPk = await this.checkPrivateKey(privateKey);
+    if (!checkPk) {
+      return undefined;
+    }
+    const wallet = new ethers.Wallet(privateKey, this.provider);
+    return wallet.address;
+  }
   async generateNewWallet() {
     const wallet = ethers.Wallet.createRandom();
     console.log(wallet.privateKey);
 
     return {
       privateKey: wallet.privateKey,
-      publicKey: wallet.publicKey,
       address: wallet.address,
       currentSelectToken: HUSDContractAddress.token
     };
@@ -317,30 +323,10 @@ export class WalletService {
     }
     return WalletStatus.FOUND;
   }
-  async checkWalletByPublicKey(publicKey: string) {
-    const check = await this.walletRepository.findOne({
-      where: { publicKey: publicKey },
-    });
-    if (!check) {
-      return WalletStatus.NOT_FOUND;
-    }
-    return WalletStatus.FOUND;
-  }
   async getAddressById(userId: string) {
     const checkUser = await this.walletRepository.findOne({
       where: {
         userId: userId,
-      },
-    });
-    if (!checkUser) {
-      return WalletStatus.NOT_FOUND;
-    }
-    return checkUser.address;
-  }
-  async getAddressByPublicKey(publicKey: string) {
-    const checkUser = await this.walletRepository.findOne({
-      where: {
-        publicKey: publicKey,
       },
     });
     if (!checkUser) {
@@ -381,7 +367,7 @@ export class WalletService {
       return true;
     }
   }
-  async updateAddress(userId:any, privateKey:any) {
+  async updateAddress(userId: any, privateKey: any) {
     const addressNew = await this.generateAddress(privateKey);
     const user = await this.findOneUser(userId);
     user.privateKey = privateKey;

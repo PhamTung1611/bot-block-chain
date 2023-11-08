@@ -26,7 +26,6 @@ import { StringSession } from "telegram/sessions";
 import input from "input";
 import { botCommand } from 'src/constants/commands/telegram.commands';
 import { sleep } from 'telegram/Helpers';
-var utils = require('ethereumjs-util')
 @Injectable()
 export class
   TelegramService {
@@ -95,7 +94,7 @@ export class
     const checkUser = await this.walletService.findOneUser(options.userId);
     if (!checkUser) {
       await ctx.replyWithHTML(
-        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Hãy chọn hành động tạo ví mới hoặc import ví của bạn để tiếp tục`,
+        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Hãy chọn hành động tạo ví mới hoặc import ví của bạn để tiếp tục!`,
         this.keyCreateAccount,
       );
     } else {
@@ -141,11 +140,20 @@ export class
           return await msg.reply('some thing went wrong');
         }
       case '/info':
-        return await msg.reply('havent implemented');
+        return await msg.replyWithHTML('This is a telegram bot project that helps you manage your personal digital wallet.\n \nIt currently interacts with <a href="https://testnet.miraiscan.io"><u>Mirai blockchain network</u></a><b>(Currently in  development)</b>');
       case '/help':
-        return await msg.reply('havent implemented');
+        const helpMessage = await msg.reply(`Commands List:
+        /start - Connect the bot to your blockchain Wallet
+        /clear - Delete all history (development only)
+        /info -information of the bot
+        /cancel - Cancel current Action
+        /token - Change bot supported token 
+        /help - Show bot Commands help`, this.deleteButton);
+        const messageId = msg.update.message.message_id + 1;
+        this.processMessages.set(messageId, helpMessage);
+        break;
       case '/token':
-        await this.handleToken(msg, options);
+        await this.handleToken(msg, options, data);
         break;
       case '/cancel':
         const message = await msg.reply(`Đang không thực hiện hành động nào`);
@@ -156,8 +164,13 @@ export class
         return this.deleteBotMessage(finalMessage, 5000);
     }
   }
-  async handleToken(msg: any, options: any) {
+  async handleToken(msg: any, options: any, data: any) {
     const user = await this.walletService.findOneUser(options.userId);
+    if ((!user)) {
+      const message = await msg.reply('you have no wallet at the moment !');
+      await this.deleteBotMessage(message, 5000);
+      return;
+    }
     const tokenMenu = await msg.reply(`Current using ${user.currentSelectToken} token`, this.tokens);
     const tokenInstances = this.tokenInstances.get(options.userId) || [];
     tokenInstances.push(tokenMenu);
@@ -275,9 +288,6 @@ export class
         break;
     }
   }
-
-
-
   //Action Handler
   async handleDepositAction(
     msg: any,
@@ -294,7 +304,6 @@ export class
       return await this.executeDepositAction(options, data, msg);
     }
   }
-
   async validateDepositAmount(
     options: any,
     data: DataCache,
@@ -315,7 +324,6 @@ export class
     this.deleteBotMessage(message, 5000);
     return false;
   }
-
   async createDepositTransaction(
     options: any,
     data: DataCache,
@@ -339,7 +347,6 @@ export class
     this.processMessages.set(options.userId, message)
     return transaction;
   }
-
   async executeDepositAction(
     options: any,
     data: DataCache,
@@ -370,8 +377,6 @@ export class
     this.deleteBotMessage(message, 5000);
     return true;
   }
-
-
 
   async handleWithDrawAction(msg: any, options: any, data: DataCache) {
     const messages = [];
@@ -476,7 +481,6 @@ export class
           this.deleteBotMessages([message], 5000);
           return;
         }
-
         const selectHistory = await this.transactionService.getAmountHistory(
           Number(amountHistory),
           address,
@@ -684,8 +688,8 @@ export class
     };
     await this.cacheManager.del(options.userId);
     const address = await this.walletService.generateWalletFromPrivateKey(input);
-    if(!address){
-     const message= await msg.replyWithHTML(
+    if (!address) {
+      const message = await msg.replyWithHTML(
         `Private Key sai cú pháp Vui lòng nhập lại\n (Example: 0xFFFFFFFFFFFFF****************FD2E8CD0364140)`,
       )
       this.deleteBotMessage(message, 10000);
@@ -694,7 +698,7 @@ export class
     const wallet = {
       privateKey: input,
       address: address,
-      currentSelectToken:'HUSD',
+      currentSelectToken: 'HUSD',
     }
     await msg.reply(`Import ví cho user ${user.userId}...`);
     const createAccount = await this.walletService.createWallet(
@@ -894,14 +898,16 @@ export class
     this.deleteBotMessage(finalMessage, 30000)
   }
   async handleDeleteButton(msg: any) {
-    const messageId = msg.update.callback_query.message.message_id
+    const messageId = msg.update.callback_query?.message.message_id || msg.update.message?.message_id;
     const message = this.processMessages.get(messageId)
+    console.log(messageId);
+    console.log(message);
     await this.deleteBotMessage(message, 0);
   }
   async deleteBotMessage(message: any, delay: number) {
     if (message?.chat) {
-      const chatId = message.chat.id;
-      const messageId = message.message_id;
+      const chatId = await message.chat.id;
+      const messageId = await message.message_id;
       try {
         setTimeout(() => {
           (async () => {

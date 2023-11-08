@@ -86,7 +86,6 @@ export class
   }
 
   async handleStart(ctx: any) {
-
     const options = {
       userId: ctx.update.message?.from.id || ctx.update.callback_query?.from.id,
       username: ctx.update.message?.from.first_name || ctx.update.callback_query?.from.first_name,
@@ -94,7 +93,7 @@ export class
     const checkUser = await this.walletService.findOneUser(options.userId);
     if (!checkUser) {
       await ctx.replyWithHTML(
-        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Hãy chọn hành động tạo ví mới hoặc import ví của bạn để tiếp tục!`,
+        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a> ! Hãy chọn hành động tạo ví mới hoặc import ví của bạn để tiếp tục !`,
         this.keyCreateAccount,
       );
     } else {
@@ -900,8 +899,7 @@ export class
   async handleDeleteButton(msg: any) {
     const messageId = msg.update.callback_query?.message.message_id || msg.update.message?.message_id;
     const message = this.processMessages.get(messageId)
-    console.log(messageId);
-    console.log(message);
+    console.log('Deleting message with Id:'+messageId);
     await this.deleteBotMessage(message, 0);
   }
   async deleteBotMessage(message: any, delay: number) {

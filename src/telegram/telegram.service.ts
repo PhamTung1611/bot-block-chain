@@ -899,7 +899,7 @@ export class
   async handleDeleteButton(msg: any) {
     const messageId = msg.update.callback_query?.message.message_id || msg.update.message?.message_id;
     const message = this.processMessages.get(messageId)
-    console.log('Deleting message with Id:'+messageId);
+    console.log('Deleting message id='+messageId);
     await this.deleteBotMessage(message, 0);
   }
   async deleteBotMessage(message: any, delay: number) {

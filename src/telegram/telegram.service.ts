@@ -25,8 +25,7 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input";
 import { botCommand } from 'src/constants/commands/telegram.commands';
-import { sleep } from 'telegram/Helpers';
-import { message } from 'telegram/client';
+import { clearInterval } from 'timers';
 @Injectable()
 export class
   TelegramService {
@@ -35,12 +34,12 @@ export class
   private tokenInstances: Map<number, string[]> = new Map();
   private processMessages: Map<number, string> = new Map();
   private balanceStorages: Map<number, number> = new Map();
+  private intervalInstances: Map<number, any> = new Map();
   private apiId = Number(this.configService.get('api_id'));
   private apiHash = this.configService.get('api_hash');
   private stringSession = new StringSession(this.configService.get('string_session'));
   //connect to Telegram bot
   private bot = new Telegraf(this.configService.get('bot_token'));
-
   private keyboardMarkup = Markup.inlineKeyboard([
     [
       Markup.button.callback('Deposit', Button.DEPOSIT),
@@ -71,6 +70,7 @@ export class
     [Markup.button.callback('Cancel', Button.CANCEL)],
   ]);
 
+
   constructor(
     private transactionService: TransactionService,
     private walletService: WalletService,
@@ -85,10 +85,13 @@ export class
     this.bot.launch();
   }
   async checkAndBalanceMessage(userId: string, msg: any) {
+    const intervalInstance = this.intervalInstances.get(Number(userId));
+    console.log('check balance function called');
     const user = await this.walletService.findOneUser(userId);
     if (!user) return;
     const balance = await this.walletService.getBalance(user.address)
-    if (balance === this.balanceStorages.get(Number(userId))) {
+    const oldBalance = this.balanceStorages.get(Number(userId))
+    if (balance === oldBalance) {
       return;
     }
     this.balanceStorages.set(Number(userId), balance);
@@ -100,9 +103,8 @@ export class
   💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
   📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
   🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`;
-
     if (messageId) {
-      console.log('update balance:' + balance);
+      console.log(`Detecting balance update from user ${userId}: ${oldBalance} ==> ${balance}`);
       await this.bot.telegram.editMessageText(msg.chat.id, messageId, '', updatedMessage, {
         parse_mode: 'HTML',
         reply_markup: {
@@ -120,6 +122,8 @@ export class
           ],
         },
       });
+      console.log('stop updating balance for user ' + userId);
+      clearInterval(intervalInstance);
     }
   }
 
@@ -152,15 +156,15 @@ export class
         console.log(`Delete start instance of user ${options.userId}`);
       }
       this.startInstances.set(options.userId, startInstances);
-      // Start balance check every 5 seconds 
-      setInterval(() => {
+      // Start balance check every n seconds 
+      let createInterval = setInterval(() => {
         // Get all user IDs
-        const userIds = this.startInstances.keys();
-        // Check balance for each user
-        for (const userId of userIds) {
-          this.checkAndBalanceMessage(userId.toString(), startInstances[0]);
-        }
-      }, 1000);
+        const userId = options.userId;
+        // Check balance for user
+        this.checkAndBalanceMessage(userId.toString(), startInstances[0]);
+
+      }, 500);
+      this.intervalInstances.set(options.userId, createInterval);
     }
   }
 
@@ -359,7 +363,7 @@ export class
     msg: any,
   ): Promise<boolean> {
     if (!Number(options.text)) {
-      const message = await msg.reply("Số tiền sai cú pháp, Vui lòng nhập lại! Để hủy thao tác nhập lệnh /cancel");
+      const message = msg.replyWithHTML('Số tiền nhập không hợp lệ \nExamples: <s>một trăm nghìn</s>,<s>100 000 </s>,<s>100!@!#$!</s> \nĐể hủy thao tác nhập lệnh /cancel');
       this.deleteBotMessage(message, 5000);
       return false;
     }
@@ -404,6 +408,15 @@ export class
     const messages = [];
     const transaction = await this.createDepositTransaction(options, data, msg);
     await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
+    if (data.money.toString().length > 65) {
+      const message = await msg.reply(`Số tiền quá lớn Vui lòng nhập lại`)
+      await this.deleteBotMessage(message, 3000);
+      await this.transactionService.updateTransactionState(
+        TransactionStatus.FAIL,
+        transaction.id,
+      );
+      return;
+    }
     //mint token
     const mint = await this.walletService.mint(transaction, data.money);
     console.log(mint.returnValue)
@@ -431,7 +444,7 @@ export class
       const Money = options.text;
       if (!Number(Money)) {
         await this.cacheManager.del(options.userId);
-        const message = await msg.reply('Vui lòng thực hiện lại');
+        const message = await msg.replyWithHTML('Số tiền nhập không hợp lệ (10,1,0.1,0.001 --> hợp lệ , <s>100 000 </s>) --> không hợp lệ');
         messages.push(message);
       }
       if (Number(Money) && Number(Money) > 0) {
@@ -487,7 +500,7 @@ export class
             transaction.id,
           );
           await this.cacheManager.del(options.userId);
-          const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
+          const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch hoặc có lỗi ngoài dự kiến đã xảy ra`);
           messages.push(message);
           this.deleteBotMessages(messages, 5000);
           return;
@@ -503,6 +516,7 @@ export class
         this.deleteBotMessages(messages, 5000);
         return;
       }
+      this.deleteBotMessages(messages, 5000);
     }
   }
 
@@ -515,8 +529,7 @@ export class
       if (data.step === 1) {
         const amountHistory = options.text;
         if (!Number(amountHistory)) {
-          await this.cacheManager.del(options.userId);
-          const message = await msg.reply('Vui lòng thực hiện lại', this.keyboardMarkup);
+          const message = await msg.reply('Nhập sai cú pháp! Vui lòng thực hiện lại\nĐể hủy thao tác nhập lệnh /cancel', this.keyboardMarkup);
           this.deleteBotMessages([message], 5000);
           return;
         } else if (Number(listHistory) < Number(amountHistory)) {
@@ -555,7 +568,7 @@ export class
   async handleReplaceWalletAction(msg: any, options: any, data: DataCache) {
     const user = await this.walletService.findOneUser(options.userId);
     const pk = msg.message.text
-    console.log(msg.update.message);
+    console.log(`Replace private key input of user ${options.userId}`);
     console.log(pk);
     if (pk === user.privateKey) {
       const finalMessage = await msg.reply('Bạn đang sử dụng ví này Vui lòng nhập lại. Để hủy nhập /cancel');
@@ -684,7 +697,7 @@ export class
         messages.push(message);
         this.cacheManager.del(options.userId);
       } else {
-        const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
+        const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch hoặc có lỗi ngoài dự kiến đã xảy ra`);
         this.deleteBotMessage(message, 5000);
         messages.push(message);
         await this.transactionService.updateTransactionState(
@@ -966,7 +979,7 @@ export class
         console.log(error);
       }
     } else {
-      console.log('Something went wrong');
+      console.log('Something went wrong with delete message function');
     }
   }
   async deleteBotMessages(messages: any[], delay: number) {
@@ -1006,7 +1019,7 @@ export class
           minDate: 43,
         })
       )
-      
+
       const message = await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`, this.handleStart(msg));
       this.deleteBotMessage(message, 3000);
     }

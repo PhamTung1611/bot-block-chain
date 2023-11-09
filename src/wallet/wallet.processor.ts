@@ -72,7 +72,7 @@ export class WalletProcessor extends WorkerHost {
   }
   async mintToken(data: any) {
     const { transaction, amount } = data;
-    console.log('transaction')
+    console.log('Detecting new Transaction');
     console.log(transaction);
     // mint token
     const user = await this.walletRepository.findOne({
@@ -101,7 +101,7 @@ export class WalletProcessor extends WorkerHost {
   }
   async burnToken(data: any) {
     const { amount, privateKey,transaction } = data;
-    console.log('transaction')
+    console.log('Detecting new Transaction');
     console.log(transaction);
     try {
       const sourceWallet = new Wallet(privateKey, this.provider);
@@ -131,7 +131,7 @@ export class WalletProcessor extends WorkerHost {
 
   async transfer(data: any) {
     const { toAddress, amount, privateKey,transaction } = data;
-    console.log('transaction')
+    console.log('Detecting new Transaction');
     console.log(transaction);
     try {
       const sourceWallet = new Wallet(privateKey, this.provider);
@@ -171,7 +171,6 @@ export class WalletProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('completed')
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onQueueComplete(job: Job, result: any) {
     this.logger.log(`Job has been finished: ${job.id}`);
   }

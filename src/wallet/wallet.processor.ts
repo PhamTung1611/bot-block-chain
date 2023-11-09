@@ -6,7 +6,10 @@ import { Job } from 'bullmq';
 import { Contract, Wallet, ethers } from 'ethers';
 import { WalletEntity } from './wallet.entity';
 import { Repository } from 'typeorm';
-import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
+import {
+  HUSDContractAddress,
+  MentosContractAddress,
+} from 'src/constants/contractAdress/contract.address';
 import { HUSD } from 'src/constants/abis/husd.abi';
 import { Mentos } from 'src/constants/abis/mentos.abi';
 import { TransactionService } from 'src/transaction/transaction.service';
@@ -23,10 +26,12 @@ export class WalletProcessor extends WorkerHost {
   private readonly contractAddress: string;
   private readonly adminWallet: any;
   private logger = new Logger();
-  constructor(private configService: ConfigService,
+  constructor(
+    private configService: ConfigService,
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
-    private transactionService: TransactionService,) {
+    private transactionService: TransactionService,
+  ) {
     super();
     this.provider = new ethers.JsonRpcProvider(configService.get('RPC'));
     this.contractAddress = '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09';
@@ -35,6 +40,7 @@ export class WalletProcessor extends WorkerHost {
       this.provider,
     );
   }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async process(job: Job<any, any, string>, _token?: string): Promise<any> {
     console.log('Process in Queue');
     switch (job.name) {
@@ -60,12 +66,12 @@ export class WalletProcessor extends WorkerHost {
         return {
           contractAddress: HUSDContractAddress,
           abi: HUSD,
-        }
+        };
       case 'MTK':
         return {
           contractAddress: MentosContractAddress,
           abi: Mentos,
-        }
+        };
       default:
         break;
     }
@@ -77,22 +83,29 @@ export class WalletProcessor extends WorkerHost {
     // mint token
     const user = await this.walletRepository.findOne({
       where: {
-        address:transaction.receiverAddress,
+        address: transaction.receiverAddress,
       },
     });
-    const userToken =  this.getTokenContract(user.currentSelectToken);
+    const userToken = this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
     const sourceWallet = new Wallet(
       this.configService.get('adminPrivateKey'),
       this.provider,
     );
-    const contract = new ethers.Contract(contractAddress, contractAbi, sourceWallet);
+    const contract = new ethers.Contract(
+      contractAddress,
+      contractAbi,
+      sourceWallet,
+    );
     const txResponse = await contract.mint(
       transaction.receiverAddress,
       this.convertToEther(Number(amount)),
-    )
-    await this.transactionService.updateTransactionHash(txResponse.hash, transaction.id);
+    );
+    await this.transactionService.updateTransactionHash(
+      txResponse.hash,
+      transaction.id,
+    );
     if (txResponse) {
       return true;
     } else {
@@ -100,7 +113,7 @@ export class WalletProcessor extends WorkerHost {
     }
   }
   async burnToken(data: any) {
-    const { amount, privateKey,transaction } = data;
+    const { amount, privateKey, transaction } = data;
     console.log('Detecting new Transaction');
     console.log(transaction);
     try {
@@ -113,24 +126,23 @@ export class WalletProcessor extends WorkerHost {
       const userToken = this.getTokenContract(user.currentSelectToken);
       const contractAddress = Object(userToken).contractAddress.address;
       const contractAbi = Object(userToken).abi;
-      const contract = new Contract(
-        contractAddress,
-        contractAbi,
-        sourceWallet,
+      const contract = new Contract(contractAddress, contractAbi, sourceWallet);
+      const txResponse = await contract.burn(
+        this.convertToEther(Number(amount)),
       );
-      const txResponse = await contract.burn(this.convertToEther(Number(amount)));
-      await this.transactionService.updateTransactionHash(txResponse.hash, transaction.id);
-      return  true;
+      await this.transactionService.updateTransactionHash(
+        txResponse.hash,
+        transaction.id,
+      );
+      return true;
     } catch (error) {
       console.log('Not enough gas');
       return false;
     }
   }
 
-
-
   async transfer(data: any) {
-    const { toAddress, amount, privateKey,transaction } = data;
+    const { toAddress, amount, privateKey, transaction } = data;
     console.log('Detecting new Transaction');
     console.log(transaction);
     try {
@@ -143,17 +155,16 @@ export class WalletProcessor extends WorkerHost {
       const userToken = this.getTokenContract(user.currentSelectToken);
       const contractAddress = Object(userToken).contractAddress.address;
       const contractAbi = Object(userToken).abi;
-      const contract = new Contract(
-        contractAddress,
-        contractAbi,
-        sourceWallet,
-      );
+      const contract = new Contract(contractAddress, contractAbi, sourceWallet);
       const tx = await contract.transfer(
         toAddress,
         this.convertToEther(Number(amount)),
       );
       tx.nonce++;
-      await this.transactionService.updateTransactionHash(tx.hash, transaction.id);
+      await this.transactionService.updateTransactionHash(
+        tx.hash,
+        transaction.id,
+      );
       console.log(tx.hash);
       return {
         status: true,
@@ -171,6 +182,7 @@ export class WalletProcessor extends WorkerHost {
   }
 
   @OnWorkerEvent('completed')
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onQueueComplete(job: Job, result: any) {
     this.logger.log(`Job has been finished: ${job.id}`);
   }

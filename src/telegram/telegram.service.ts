@@ -1,7 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  session, Markup, Telegraf
-} from 'telegraf';
+import { session, Markup, Telegraf } from 'telegraf';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { TransactionService } from 'src/transaction/transaction.service';
@@ -19,16 +17,15 @@ interface DataCache {
   sender?: string;
   msg?: any[];
 }
-import { format } from 'date-fns'
-import { Api } from "telegram/tl"
-import { TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions";
-import input from "input";
+import { format } from 'date-fns';
+import { Api } from 'telegram/tl';
+import { TelegramClient } from 'telegram';
+import { StringSession } from 'telegram/sessions';
+import input from 'input';
 import { botCommand } from 'src/constants/commands/telegram.commands';
 import { clearInterval } from 'timers';
 @Injectable()
-export class
-  TelegramService {
+export class TelegramService {
   // Create an array to store messages for each user
   private startInstances: Map<number, any[]> = new Map();
   private tokenInstances: Map<number, string[]> = new Map();
@@ -36,9 +33,12 @@ export class
   private balanceStorages: Map<number, number> = new Map();
   private nativeTokenStorages: Map<number, number> = new Map();
   private intervalInstances: Map<number, any> = new Map();
+  private intervalthreshold: Map<number, number> = new Map();
   private apiId = Number(this.configService.get('api_id'));
   private apiHash = this.configService.get('api_hash');
-  private stringSession = new StringSession(this.configService.get('string_session'));
+  private stringSession = new StringSession(
+    this.configService.get('string_session'),
+  );
   //connect to Telegram bot
   private bot = new Telegraf(this.configService.get('bot_token'));
   private keyboardMarkup = Markup.inlineKeyboard([
@@ -55,14 +55,15 @@ export class
   ]);
 
   private keyCreateAccount = Markup.inlineKeyboard([
-    [Markup.button.callback('Create Wallet', Button.CREATE),
-    Markup.button.callback('Import Wallet', Button.IMPORT),
-    ]
+    [
+      Markup.button.callback('Create Wallet', Button.CREATE),
+      Markup.button.callback('Import Wallet', Button.IMPORT),
+    ],
   ]);
-  private tokens = Markup.inlineKeyboard([
-    [Markup.button.callback('HUSD', Button.HUSD),
-    Markup.button.callback('MTK', Button.MTK)]
-  ]);
+  private tokenArray = [
+    Markup.button.callback('HUSD', Button.HUSD),
+    Markup.button.callback('MTK', Button.MTK),
+  ];
   private deleteButton = Markup.inlineKeyboard([
     [Markup.button.callback('Delete Message', Button.DELETE)],
   ]);
@@ -70,7 +71,6 @@ export class
     [Markup.button.callback('Wallet address', Button.WALLET_ADDRESS)],
     [Markup.button.callback('Cancel', Button.CANCEL)],
   ]);
-
 
   constructor(
     private transactionService: TransactionService,
@@ -90,48 +90,66 @@ export class
     console.log('check balance function called');
     const user = await this.walletService.findOneUser(userId);
     if (!user) return;
-    const balance = await this.walletService.getBalance(user.address)
-    const oldBalance = this.balanceStorages.get(Number(userId))
-    const nativeToken = Number(await this.walletService.getUserNativeToken(user.address))
+    const balance = await this.walletService.getBalance(user.address);
+    const oldBalance = this.balanceStorages.get(Number(userId));
+    const nativeToken = Number(
+      await this.walletService.getUserNativeToken(user.address),
+    );
     if (balance !== oldBalance) {
       this.balanceStorages.set(Number(userId), balance);
       this.nativeTokenStorages.set(Number(userId), nativeToken);
-      const messageId = this.startInstances.get(Number(userId))?.[0]?.message_id;
-      const updatedMessage = `Xin chào <a href="tg://user?id=${userId}">@${user.username}</a>!!\n💳Địa chỉ wallet!\n<code>${user.address}</code>\n
-  🪙Token Balance:<b> ${balance} ${user.currentSelectToken}</b> (last update: ${format(Date.now(), 'HH:mm:ss')}) \n     
-  💰Native coin:<b> ${nativeToken} PGX (last update: ${format(Date.now(), 'HH:mm:ss')})</b>\n
+      const messageId = this.startInstances.get(Number(userId))?.[0]
+        ?.message_id;
+      const updatedMessage = `Xin chào <a href="tg://user?id=${userId}">@${user.username
+        }</a>!!\n💳Địa chỉ wallet!\n<code>${user.address}</code>\n
+  🪙Token Balance:<b> ${balance} ${user.currentSelectToken
+        }</b> (last update: ${format(Date.now(), 'HH:mm:ss')}) \n     
+  💰Native coin:<b> ${nativeToken} PGX</b>\n
   📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
   🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`;
       if (messageId) {
-        console.log(`Detecting balance update from user ${userId}: ${oldBalance} ==> ${balance}`);
-        await this.bot.telegram.editMessageText(msg.chat.id, messageId, '', updatedMessage, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                Markup.button.callback('Deposit', Button.DEPOSIT),
-                Markup.button.callback('Withdraw', Button.WITHDRAW),
-                Markup.button.callback('Transfer', Button.WALLET_ADDRESS),
+        console.log(
+          `Detecting balance update from user ${userId}: ${oldBalance} ==> ${balance}`,
+        );
+        await this.bot.telegram.editMessageText(
+          msg.chat.id,
+          messageId,
+          '',
+          updatedMessage,
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  Markup.button.callback('Deposit', Button.DEPOSIT),
+                  Markup.button.callback('Withdraw', Button.WITHDRAW),
+                  Markup.button.callback('Transfer', Button.WALLET_ADDRESS),
+                ],
+                [
+                  Markup.button.callback('Transaction History', Button.HISTORY),
+                  Markup.button.callback('Private Key', Button.PK),
+                  Markup.button.callback(
+                    'Replace Wallet',
+                    Button.REPLACE_WALLET,
+                  ),
+                ],
               ],
-              [
-                Markup.button.callback('Transaction History', Button.HISTORY),
-                Markup.button.callback('Private Key', Button.PK),
-                Markup.button.callback('Replace Wallet', Button.REPLACE_WALLET),
-              ],
-            ],
+            },
           },
-        })
-
+        );
       }
+      console.log('stop updating balance for user ' + userId);
+      clearInterval(intervalInstance);
+      this.intervalthreshold.set(Number(userId), 0);
     }
-    console.log('stop updating balance for user ' + userId);
-    clearInterval(intervalInstance);
   }
 
   async handleStart(ctx: any) {
     const options = {
       userId: ctx.update.message?.from.id || ctx.update.callback_query?.from.id,
-      username: ctx.update.message?.from.first_name || ctx.update.callback_query?.from.first_name,
+      username:
+        ctx.update.message?.from.first_name ||
+        ctx.update.callback_query?.from.first_name,
     };
     const checkUser = await this.walletService.findOneUser(options.userId);
     if (!checkUser) {
@@ -140,15 +158,20 @@ export class
         this.keyCreateAccount,
       );
     } else {
-      const balance = await this.walletService.getBalance(checkUser.address)
+      const balance = await this.walletService.getBalance(checkUser.address);
       this.balanceStorages.set(options.userId, balance);
-      const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
+      const nativeToken = await this.walletService.getUserNativeToken(
+        checkUser.address,
+      );
       this.nativeTokenStorages.set(options.userId, Number(nativeToken));
-      const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
+      const message = await ctx.replyWithHTML(
+        `Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
 🪙Token Balance:<b> ${balance} ${checkUser.currentSelectToken}</b>\n     
 💰Native coin:<b> ${nativeToken} PGX </b>\n
 📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
-🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
+🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`,
+        this.keyboardMarkup,
+      );
       const startInstances = this.startInstances.get(options.userId) || [];
       startInstances.push(message);
       if (startInstances.length > 1) {
@@ -158,18 +181,31 @@ export class
         console.log(`Delete start instance of user ${options.userId}`);
       }
       this.startInstances.set(options.userId, startInstances);
-      // Start balance check every n seconds 
-      let createInterval = setInterval(() => {
-        // Get all user IDs
-        const userId = options.userId;
-        // Check balance for user
-        this.checkBalanceChange(userId.toString(), startInstances[0]);
-
-      }, 500);
-      this.intervalInstances.set(options.userId, createInterval);
+      // Start balance check every n seconds
+      const intervalInstance = this.createinterval(
+        options.userId,
+        500,
+        startInstances[0],
+      );
+      this.intervalInstances.set(options.userId, intervalInstance);
+      //this.intervalInstances.set(options.userId, createInterval);
     }
   }
+  createinterval(userId: string, delay: number, startInstances: any) {
+    const createInterval = setInterval(() => {
+      //add function need to update data here
+      this.checkBalanceChange(userId.toString(), startInstances);
+      let callCount = this.intervalthreshold.get(Number(userId)) || 0;
+      callCount++;
 
+      if (callCount >= 5) {
+        clearInterval(createInterval);
+        this.intervalthreshold.set(Number(userId), 0);
+        console.log(`Stopped interval for user ${userId}`);
+      }
+      this.intervalthreshold.set(Number(userId), callCount);
+    }, delay);
+  }
   async handleMessage(msg: any) {
     const options = {
       userId: msg.update.message.from.id,
@@ -181,7 +217,6 @@ export class
       return await this.handleUserAction(msg, options, data);
     }
     return await this.handleUserCommands(msg, options, data);
-
   }
   async handleUserCommands(msg: any, options: any, data: any) {
     switch (options.text) {
@@ -192,15 +227,20 @@ export class
           return await msg.reply('some thing went wrong');
         }
       case '/info':
-        return await msg.replyWithHTML('This is a telegram bot project that helps you manage your personal digital wallet.\n \nIt currently interacts with <a href="https://testnet.miraiscan.io"><u>Mirai blockchain network</u></a><b>(Currently in  development)</b>');
+        return await msg.replyWithHTML(
+          'This is a telegram bot project that helps you manage your personal digital wallet.\n \nIt currently interacts with <a href="https://testnet.miraiscan.io"><u>Mirai blockchain network</u></a><b>(Currently in  development)</b>',
+        );
       case '/help':
-        const helpMessage = await msg.reply(`Commands List:
+        const helpMessage = await msg.reply(
+          `Commands List:
         /start - Connect the bot to your blockchain Wallet
         /clear - Delete all history (development only)
         /info -information of the bot
         /cancel - Cancel current Action
         /token - Change bot supported token 
-        /help - Show bot Commands help`, this.deleteButton);
+        /help - Show bot Commands help`,
+          this.deleteButton,
+        );
         const messageId = msg.update.message.message_id + 1;
         this.processMessages.set(messageId, helpMessage);
         break;
@@ -212,18 +252,25 @@ export class
         this.deleteBotMessage(message, 5000);
         break;
       default:
-        const finalMessage = await msg.reply('Xin lỗi, tôi không hiểu. Vui lòng thử lại');
+        const finalMessage = await msg.reply(
+          'Xin lỗi, tôi không hiểu. Vui lòng thử lại',
+        );
         return this.deleteBotMessage(finalMessage, 5000);
     }
   }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async handleToken(msg: any, options: any, data: any) {
     const user = await this.walletService.findOneUser(options.userId);
-    if ((!user)) {
+    if (!user) {
       const message = await msg.reply('you have no wallet at the moment !');
       await this.deleteBotMessage(message, 5000);
       return;
     }
-    const tokenMenu = await msg.reply(`Current using ${user.currentSelectToken} token`, this.tokens);
+    const tokenMenu = await msg.reply(
+      `Current using ${user.currentSelectToken} token`,
+      Markup.inlineKeyboard([this.tokenArray, [Markup.button.callback('Add Token', Button.ADD_TOKEN),
+      Markup.button.callback('Delete Token', Button.DELETE_TOKEN)]])
+    );
     const tokenInstances = this.tokenInstances.get(options.userId) || [];
     tokenInstances.push(tokenMenu);
     if (tokenInstances.length > 1) {
@@ -232,17 +279,24 @@ export class
       tokenInstances.pop();
       console.log(`Delete token instance of user ${options.userId}`);
     }
+
     this.tokenInstances.set(options.userId, tokenInstances);
   }
   async handleChangingToken(token: string, msg: any, options: any) {
     await this.walletService.changeToken(token, options.userId);
-    const message = await msg.reply(`changed to token ${token}`, this.handleStart(msg))
+    const message = await msg.reply(
+      `changed to token ${token}`,
+      this.handleStart(msg),
+    );
     await this.deleteBotMessage(message, 5000);
   }
   async handleUserAction(msg: any, options: any, data: DataCache) {
     if (options.text === '/cancel') {
       this.cacheManager.del(options.userId);
-      const message = await msg.reply('Action Cancelled', this.handleStart(msg));
+      const message = await msg.reply(
+        'Action Cancelled',
+        this.handleStart(msg),
+      );
       this.deleteBotMessage(message, 5000);
       return;
     }
@@ -263,14 +317,17 @@ export class
         await this.handleSendMoneyAction(msg, options, data);
         break;
       case Action.REPLACE_WALLET:
-        await this.handleReplaceWalletAction(msg, options, data)
+        await this.handleReplaceWalletAction(msg, options, data);
         break;
       case Action.IMPORT:
-        await this.handleImportAction(msg, options, data)
+        await this.handleImportAction(msg, options, data);
         break;
       default:
         this.cacheManager.del(options.userId);
-        const message = await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
+        const message = await msg.reply(
+          'Xin lỗi, tôi không hiểu',
+          this.keyboardMarkup,
+        );
         this.deleteBotMessage(message, 5000);
         break;
     }
@@ -318,7 +375,7 @@ export class
         break;
       case Button.MTK:
         await this.handleChangingToken(Button.MTK, msg, options);
-        break
+        break;
       case Button.DELETE:
         await this.handleDeleteButton(msg);
         break;
@@ -328,29 +385,47 @@ export class
       case Button.REPLACE_WALLET:
         await this.handleReplaceWallet(msg, data, options, checkUser);
         break;
+      case Button.ADD_TOKEN:
+        await this.handleAddTokenButton(msg, data, options, checkUser);
+        break;
+      case Button.DELETE_TOKEN:
+        await this.handleDeleteTokenButton(msg);
+        break;
       default:
         await this.cacheManager.del(options.userId);
         const messages = [];
         messages.push(await msg.reply(`Xin lỗi tôi không hiểu`));
-        messages.push(await msg.reply(
-          'Tôi chỉ thực hiện được như bên dưới thôi!',
-          await this.handleButton(msg),
-        ));
+        messages.push(
+          await msg.reply(
+            'Tôi chỉ thực hiện được như bên dưới thôi!',
+            await this.handleButton(msg),
+          ),
+        );
         await this.deleteBotMessages(messages, 5000);
         break;
     }
   }
-
-
+  async handleDeleteTokenButton(msg: any) {
+    //delete and update button array
+   await msg.reply('Delete token');
+  }
+  async handleAddTokenButton(msg: any,data:any,options:any,checkUser:any) {
+    //add button to array 
+    this.tokenArray.push(Markup.button.callback('Test', 'Test'));
+  }
 
   //Action Handler
   async handleDepositAction(
     msg: any,
     options: any,
-    data: DataCache
+    data: DataCache,
   ): Promise<any> {
     if (data.step === 1) {
-      const isValidAmount = await this.validateDepositAmount(options, data, msg);
+      const isValidAmount = await this.validateDepositAmount(
+        options,
+        data,
+        msg,
+      );
       if (!isValidAmount) {
         return;
       }
@@ -365,7 +440,9 @@ export class
     msg: any,
   ): Promise<boolean> {
     if (!Number(options.text)) {
-      const message = msg.replyWithHTML('Số tiền nhập không hợp lệ \nExamples: <s>một trăm nghìn</s>,<s>100 000 </s>,<s>100!@!#$!</s> \nĐể hủy thao tác nhập lệnh /cancel');
+      const message = msg.replyWithHTML(
+        'Số tiền nhập không hợp lệ \nExamples: <s>một trăm nghìn</s>,<s>100 000 </s>,<s>100!@!#$!</s> \nĐể hủy thao tác nhập lệnh /cancel',
+      );
       this.deleteBotMessage(message, 5000);
       return false;
     }
@@ -375,14 +452,14 @@ export class
       return true;
     }
     await this.cacheManager.del(options.userId);
-    const message = await msg.reply("Vui lòng thực hiện lại");
+    const message = await msg.reply('Vui lòng thực hiện lại');
     this.deleteBotMessage(message, 5000);
     return false;
   }
   async createDepositTransaction(
     options: any,
     data: DataCache,
-    msg: any
+    msg: any,
   ): Promise<any> {
     const user = await this.walletService.findOneUser(options.userId);
     const address = await this.walletService.checkAddress(options.userId);
@@ -397,21 +474,25 @@ export class
       type: String(data.action),
       status: TransactionStatus.CREATED,
     };
-    const transaction = await this.transactionService.createTransaction(createTransaction);
-    const message = await msg.reply("processing...");
-    this.processMessages.set(options.userId, message)
+    const transaction =
+      await this.transactionService.createTransaction(createTransaction);
+    const message = await msg.reply('processing...');
+    this.processMessages.set(options.userId, message);
     return transaction;
   }
   async executeDepositAction(
     options: any,
     data: DataCache,
-    msg: any
+    msg: any,
   ): Promise<boolean> {
     const messages = [];
     const transaction = await this.createDepositTransaction(options, data, msg);
-    await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
+    await this.transactionService.updateTransactionState(
+      TransactionStatus.PENDING,
+      transaction.id,
+    );
     if (data.money.toString().length > 65) {
-      const message = await msg.reply(`Số tiền quá lớn Vui lòng nhập lại`)
+      const message = await msg.reply(`Số tiền quá lớn Vui lòng nhập lại`);
       await this.deleteBotMessage(message, 3000);
       await this.transactionService.updateTransactionState(
         TransactionStatus.FAIL,
@@ -421,21 +502,30 @@ export class
     }
     //mint token
     const mint = await this.walletService.mint(transaction, data.money);
-    console.log(mint.returnValue)
+    console.log(mint.returnValue);
     if (!mint) {
-      await this.transactionService.updateTransactionState(TransactionStatus.FAIL, transaction.id);
+      await this.transactionService.updateTransactionState(
+        TransactionStatus.FAIL,
+        transaction.id,
+      );
       messages.push(await msg.reply(`Nạp tiền thất bại`));
       messages.push(this.processMessages.get(options.userId));
       await this.deleteBotMessages(messages, 5000);
       return false;
     }
 
-    await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
+    await this.transactionService.updateTransactionState(
+      TransactionStatus.SUCCESS,
+      transaction.id,
+    );
     messages.push(await msg.reply(`Nạp tiền thành công`));
     messages.push(this.processMessages.get(options.userId));
     this.cacheManager.del(options.userId);
     this.deleteBotMessages(messages, 5000);
-    const message = await msg.reply(`tôi có thể giúp gì tiếp cho bạn`, this.handleStart(msg));
+    const message = await msg.reply(
+      `tôi có thể giúp gì tiếp cho bạn`,
+      this.handleStart(msg),
+    );
     this.deleteBotMessage(message, 5000);
     return true;
   }
@@ -446,7 +536,9 @@ export class
       const Money = options.text;
       if (!Number(Money)) {
         await this.cacheManager.del(options.userId);
-        const message = await msg.replyWithHTML('Số tiền nhập không hợp lệ (10,1,0.1,0.001 --> hợp lệ , <s>100 000 </s>) --> không hợp lệ');
+        const message = await msg.replyWithHTML(
+          'Số tiền nhập không hợp lệ (10,1,0.1,0.001 --> hợp lệ , <s>100 000 </s>) --> không hợp lệ',
+        );
         messages.push(message);
       }
       if (Number(Money) && Number(Money) > 0) {
@@ -495,14 +587,20 @@ export class
         );
         const message = await msg.reply(`processing....`);
         messages.push(message);
-        const burn = await this.walletService.burn(data.money, privateKey, transaction);
+        const burn = await this.walletService.burn(
+          data.money,
+          privateKey,
+          transaction,
+        );
         if (!burn) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
             transaction.id,
           );
           await this.cacheManager.del(options.userId);
-          const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch hoặc có lỗi ngoài dự kiến đã xảy ra`);
+          const message = await msg.replyWithHTML(
+            `Lượng token PGX hiện tại không đủ để thực hiện giao dịch hoặc có lỗi ngoài dự kiến đã xảy ra`,
+          );
           messages.push(message);
           this.deleteBotMessages(messages, 5000);
           return;
@@ -513,7 +611,10 @@ export class
         );
         console.log(Object(burn).txHash);
         await this.cacheManager.del(options.userId);
-        const message1 = await msg.reply(`Rút tiền thành công`, this.handleStart(msg));
+        const message1 = await msg.reply(
+          `Rút tiền thành công`,
+          this.handleStart(msg),
+        );
         messages.push(message1);
         this.deleteBotMessages(messages, 5000);
         return;
@@ -521,7 +622,6 @@ export class
       this.deleteBotMessages(messages, 5000);
     }
   }
-
 
   async handleHistoryAction(msg: any, options: any, data: DataCache) {
     try {
@@ -531,7 +631,10 @@ export class
       if (data.step === 1) {
         const amountHistory = options.text;
         if (!Number(amountHistory)) {
-          const message = await msg.reply('Nhập sai cú pháp! Vui lòng thực hiện lại\nĐể hủy thao tác nhập lệnh /cancel', this.keyboardMarkup);
+          const message = await msg.reply(
+            'Nhập sai cú pháp! Vui lòng thực hiện lại\nĐể hủy thao tác nhập lệnh /cancel',
+            this.keyboardMarkup,
+          );
           this.deleteBotMessages([message], 5000);
           return;
         } else if (Number(listHistory) < Number(amountHistory)) {
@@ -550,11 +653,15 @@ export class
         let transaction = '';
         let i = 1;
         for (const item of selectHistory) {
-          transaction += `${i++}.Transaction Hash:  <code>${item?.transactionHash}</code>\nAmount: ${item?.balance} <b>${item?.token}</b>\nType:<b>${item?.type}</b>\nStatus:<b>${item.status}</b>\nTransaction created at:<b> ${format(item?.createdDate, 'yyyy-MM-dd HH:mm:ss')}</b>\n\n`;
+          transaction += `${i++}.Transaction Hash:  <code>${item?.transactionHash}</code>\nAmount: ${item?.balance} <b>${item?.token}</b>\nType:<b>${item?.type}</b>\nStatus:<b>${item.status
+            }</b>\nTransaction created at:<b> ${format(
+              item?.createdDate,
+              'yyyy-MM-dd HH:mm:ss',
+            )}</b>\n\n`;
         }
         const messages = [];
         const message = await msg.replyWithHTML(transaction, this.deleteButton);
-        this.processMessages.set(message.message_id, message)
+        this.processMessages.set(message.message_id, message);
         messages.push(
           await msg.replyWithHTML(
             `Bạn đang xem <b>${selectHistory.length} giao dịch </b>`,
@@ -568,32 +675,38 @@ export class
   }
 
   async handleReplaceWalletAction(msg: any, options: any, data: DataCache) {
+    if (data.action !== Action.REPLACE_WALLET) {
+      return;
+    }
     const user = await this.walletService.findOneUser(options.userId);
-    const pk = msg.message.text
+    const pk = msg.message.text;
     console.log(`Replace private key input of user ${options.userId}`);
     console.log(pk);
     if (pk === user.privateKey) {
-      const finalMessage = await msg.reply('Bạn đang sử dụng ví này Vui lòng nhập lại. Để hủy nhập /cancel');
-      this.deleteBotMessage(finalMessage, 10000)
+      const finalMessage = await msg.reply(
+        'Bạn đang sử dụng ví này Vui lòng nhập lại. Để hủy nhập /cancel',
+      );
+      this.deleteBotMessage(finalMessage, 10000);
       return;
     }
     const checkPrivateKey = await this.walletService.checkPrivateKey(pk);
     if (!checkPrivateKey) {
-      const finalMessage = await msg.reply('Không đúng định dạng PrivateKey, Vui lòng nhập lại. Để hủy nhập /cancel');
-      this.deleteBotMessage(finalMessage, 10000)
-      this.handleStart(msg)
-
+      const finalMessage = await msg.reply(
+        'Không đúng định dạng PrivateKey, Vui lòng nhập lại. Để hủy nhập /cancel',
+      );
+      this.deleteBotMessage(finalMessage, 10000);
+      this.handleStart(msg);
     } else {
-      const update = await this.walletService.updateAddress(options.userId, pk)
+      const update = await this.walletService.updateAddress(options.userId, pk);
       if (!update) {
         const finalMessage = await msg.reply('Không thành công');
-        this.deleteBotMessage(finalMessage, 10000)
-        this.handleStart(msg)
+        this.deleteBotMessage(finalMessage, 10000);
+        this.handleStart(msg);
         await this.cacheManager.del(options.userId);
       } else {
         const finalMessage = await msg.reply('Thành công');
-        this.deleteBotMessage(finalMessage, 10000)
-        this.handleStart(msg)
+        this.deleteBotMessage(finalMessage, 10000);
+        this.handleStart(msg);
         await this.cacheManager.del(options.userId);
       }
     }
@@ -609,7 +722,7 @@ export class
         messages.push(await msg.reply(`Địa chỉ người dùng không tồn tại`));
         messages.push(await msg.reply('Vui lòng Điền lại địa chỉ'));
         data.step = 1;
-        await this.deleteBotMessages(messages, 5000)
+        await this.deleteBotMessages(messages, 5000);
         return;
       }
 
@@ -618,15 +731,14 @@ export class
         data.step = 3;
         data.receiver = address;
         messages.push(await msg.reply('Bạn muốn chuyển bao nhiêu tiền'));
-        await this.deleteBotMessages(messages, 5000)
+        await this.deleteBotMessages(messages, 5000);
         return;
       }
     } else {
       messages.push(await msg.reply(`Có gì đó không ổn vui lòng thử lại`));
       await this.cacheManager.del(options.userId);
     }
-    await this.deleteBotMessages(messages, 5000)
-
+    await this.deleteBotMessages(messages, 5000);
   }
   async handleSendMoneyAction(msg: any, options: any, data: DataCache) {
     const messages = [];
@@ -637,7 +749,7 @@ export class
         const message = await msg.reply(
           'Vui lòng thực hiện lại',
           this.handleStart(msg),
-        )
+        );
         this.deleteBotMessage(message, 5000);
         return;
       }
@@ -649,7 +761,8 @@ export class
 
       const receiver = data.receiver;
       const sender = await this.walletService.getAddressById(options.userId);
-      const token = (await this.walletService.findOneUser(options.userId)).currentSelectToken;
+      const token = (await this.walletService.findOneUser(options.userId))
+        .currentSelectToken;
       const defaultTxHash = 'Unavailable';
       const createTransaction = {
         balance: String(data.money),
@@ -668,7 +781,7 @@ export class
         options.userId,
         receiver,
         money,
-        transaction
+        transaction,
       );
       await this.transactionService.updateTransactionState(
         TransactionStatus.PENDING,
@@ -679,8 +792,14 @@ export class
           TransactionStatus.SUCCESS,
           transaction.id,
         );
-        await this.transactionService.updateTransactionHash(Object(checkStatus).txHash, transaction.id);
-        const message = await msg.reply(`Chuyển tiền thành công`, this.handleStart(msg));
+        await this.transactionService.updateTransactionHash(
+          Object(checkStatus).txHash,
+          transaction.id,
+        );
+        const message = await msg.reply(
+          `Chuyển tiền thành công`,
+          this.handleStart(msg),
+        );
         messages.push(message);
         data.step = 1;
         data.action = '';
@@ -691,15 +810,17 @@ export class
         );
         messages.push(message);
         this.cacheManager.del(options.userId);
-      }
-      else if (checkStatus === WalletStatus.SELF) {
+      } else if (checkStatus === WalletStatus.SELF) {
         const message = await msg.reply(
-          `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`, this.handleStart(msg)
+          `Không thể chuyển tiền cho bản thân, để nạp tiền dùng Deposit`,
+          this.handleStart(msg),
         );
         messages.push(message);
         this.cacheManager.del(options.userId);
       } else {
-        const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch hoặc có lỗi ngoài dự kiến đã xảy ra`);
+        const message = await msg.replyWithHTML(
+          `Lượng token PGX hiện tại không đủ để thực hiện giao dịch hoặc có lỗi ngoài dự kiến đã xảy ra`,
+        );
         this.deleteBotMessage(message, 5000);
         messages.push(message);
         await this.transactionService.updateTransactionState(
@@ -726,8 +847,10 @@ export class
   }
   async handleImportAccountButton(msg: any, data: any, options: any) {
     this.setCache(options, Action.IMPORT, 1);
-    const finalMessage = await msg.replyWithHTML(`Vui lòng nhập privateKey của ví bạn muốn import`);
-    this.deleteBotMessage(finalMessage, 10000)
+    const finalMessage = await msg.replyWithHTML(
+      `Vui lòng nhập privateKey của ví bạn muốn import`,
+    );
+    this.deleteBotMessage(finalMessage, 10000);
   }
   async handleReplaceWallet(msg: any, data: any, options: any, checkUser: any) {
     if (!checkUser) {
@@ -735,27 +858,35 @@ export class
     }
     if (data.action === '') {
       this.setCache(options, Action.REPLACE_WALLET, 1);
-      const finalMessage = await msg.replyWithHTML(`Vui lòng nhập privateKey của ví bạn muốn import`);
-      this.deleteBotMessage(finalMessage, 10000)
+      const finalMessage = await msg.replyWithHTML(
+        `Vui lòng nhập privateKey của ví bạn muốn import`,
+      );
+      this.deleteBotMessage(finalMessage, 10000);
     } else {
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.REPLACE_WALLET, 1);
-      const message = await msg.reply('Vui lòng nhập privateKey của ví bạn muốn import');
-      this.deleteBotMessage(message, 10000)
+      const message = await msg.reply(
+        'Vui lòng nhập privateKey của ví bạn muốn import',
+      );
+      this.deleteBotMessage(message, 10000);
     }
   }
   async handleImportAction(msg: any, options: any, data: DataCache) {
-    const input = msg.update.message.text
+    if (data.action !== Action.IMPORT) {
+      return;
+    }
+    const input = msg.update.message.text;
     const user = {
       userId: msg.chat.id,
       username: msg.chat.first_name,
     };
     await this.cacheManager.del(options.userId);
-    const address = await this.walletService.generateWalletFromPrivateKey(input);
+    const address =
+      await this.walletService.generateWalletFromPrivateKey(input);
     if (!address) {
       const message = await msg.replyWithHTML(
         `Private Key sai cú pháp Vui lòng nhập lại\n (Example: 0xFFFFFFFFFFFFF****************FD2E8CD0364140)`,
-      )
+      );
       this.deleteBotMessage(message, 10000);
       return;
     }
@@ -763,7 +894,7 @@ export class
       privateKey: input,
       address: address,
       currentSelectToken: 'HUSD',
-    }
+    };
     await msg.reply(`Import ví cho user ${user.userId}...`);
     const createAccount = await this.walletService.createWallet(
       {
@@ -773,15 +904,10 @@ export class
       address,
     );
     if (createAccount) {
-      await msg.reply(
-        `Import thành công!`,
-        this.handleStart(msg),
-      )
+      await msg.reply(`Import thành công!`, this.handleStart(msg));
       await this.cacheManager.del(options.userId);
     } else {
-      await msg.reply(
-        `Lỗi`,
-      )
+      await msg.reply(`Lỗi`);
     }
   }
   async handleCreateAccountButton(
@@ -796,10 +922,12 @@ export class
     }
     if (checkUser) {
       await this.cacheManager.del(options.userId);
-      messages.push(await msg.reply(
-        'Bạn đã có tài khoản vui lòng thực hiện chức năng khác',
-        this.handleStart(msg),
-      ));
+      messages.push(
+        await msg.reply(
+          'Bạn đã có tài khoản vui lòng thực hiện chức năng khác',
+          this.handleStart(msg),
+        ),
+      );
       return;
     }
     const wallet = await this.walletService.generateNewWallet();
@@ -816,10 +944,9 @@ export class
       wallet.address,
     );
     if (createAccount) {
-      messages.push(await msg.reply(
-        `Tạo tài khoản thành công!`,
-        this.handleStart(msg),
-      ));
+      messages.push(
+        await msg.reply(`Tạo tài khoản thành công!`, this.handleStart(msg)),
+      );
       await this.cacheManager.del(options.userId);
     }
     await this.deleteBotMessages(messages, 5000);
@@ -836,13 +963,13 @@ export class
     if (data.action === '') {
       this.setCache(options, Action.DEPOSIT, 1);
       const finalMessage = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 10000)
+      this.deleteBotMessage(finalMessage, 10000);
     } else {
       console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.DEPOSIT, 1);
       const message = await msg.reply('Bạn muốn nạp bao nhiêu tiền');
-      this.deleteBotMessage(message, 10000)
+      this.deleteBotMessage(message, 10000);
     }
   }
   async handleWithDrawButton(
@@ -857,16 +984,14 @@ export class
     if (data.action === '') {
       this.setCache(options, Action.WITHDRAW, 1);
       const finalMessage = await msg.reply('Bạn muốn rút bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 10000)
-
+      this.deleteBotMessage(finalMessage, 10000);
     } else {
       // const finalMessage = await msg.reply(`Canceling ${data.action}`);
       // this.deleteBotMessage(finalMessage,1000)
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.WITHDRAW, 1);
       const finalMessage = await msg.reply('Bạn muốn rút bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 10000)
-
+      this.deleteBotMessage(finalMessage, 10000);
     }
   }
   async handleHistoryButton(
@@ -882,15 +1007,17 @@ export class
 
     const listHistory = await this.transactionService.getListHistory(address);
     if (Number(listHistory) === 0) {
-      const finalMessage = await msg.reply('Bạn không có lịch sử giao dịch nào');
-      return this.deleteBotMessage(finalMessage, 10000)
+      const finalMessage = await msg.reply(
+        'Bạn không có lịch sử giao dịch nào',
+      );
+      return this.deleteBotMessage(finalMessage, 10000);
     }
     if (data.action === '') {
       this.setCache(options, Action.HISTORY, 1);
       const message = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(message, 5000)
+      this.deleteBotMessage(message, 5000);
     } else {
       console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
@@ -898,7 +1025,7 @@ export class
       const message = await msg.reply(
         `Bạn đang có ${listHistory} giao dịch bạn muốn xem bao nhiêu giao dịch?`,
       );
-      this.deleteBotMessage(message, 5000)
+      this.deleteBotMessage(message, 5000);
     }
   }
   async handlePrivateKeyButton(
@@ -917,8 +1044,15 @@ export class
     }
     // const info = await this.walletService.checkInformation(options.userId);
     const address = await this.walletService.getAddressById(options.userId);
-    const tempMessage = await msg.reply('🗝Here is your private key (Dont share it to others)')
-    const message = await msg.replyWithHTML(`<tg-spoiler> ${await this.walletService.getPrivateKey(address)} </tg-spoiler>`, this.deleteButton);
+    const tempMessage = await msg.reply(
+      '🗝Here is your private key (Dont share it to others)',
+    );
+    const message = await msg.replyWithHTML(
+      `<tg-spoiler> ${await this.walletService.getPrivateKey(
+        address,
+      )} </tg-spoiler>`,
+      this.deleteButton,
+    );
     this.deleteBotMessage(tempMessage, 5000);
     this.processMessages.set(message.message_id, message);
     await this.cacheManager.del(options.userId);
@@ -935,13 +1069,13 @@ export class
     if (data.action === '') {
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       const finalMessage = await msg.reply('Điền địa chỉ người nhận');
-      await this.deleteBotMessage(finalMessage, 10000)
+      await this.deleteBotMessage(finalMessage, 10000);
     } else {
       // await msg.reply(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.TRANSFER_BY_ADDRESS, 1);
       const finalMessage = await msg.reply('Điền địa chỉ người nhận');
-      await this.deleteBotMessage(finalMessage, 10000)
+      await this.deleteBotMessage(finalMessage, 10000);
     }
   }
   async handleTransferButton(msg: any, checkUser: any) {
@@ -958,12 +1092,17 @@ export class
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
     await this.cacheManager.del(options.userId);
-    const finalMessage = await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
-    this.deleteBotMessage(finalMessage, 30000)
+    const finalMessage = await msg.reply(
+      'Hủy giao dịch thành công',
+      this.keyboardMarkup,
+    );
+    this.deleteBotMessage(finalMessage, 30000);
   }
   async handleDeleteButton(msg: any) {
-    const messageId = msg.update.callback_query?.message.message_id || msg.update.message?.message_id;
-    const message = this.processMessages.get(messageId)
+    const messageId =
+      msg.update.callback_query?.message.message_id ||
+      msg.update.message?.message_id;
+    const message = this.processMessages.get(messageId);
     console.log('Deleting message id=' + messageId);
     await this.deleteBotMessage(message, 0);
   }
@@ -984,23 +1123,27 @@ export class
       console.log('Something went wrong with delete message function');
     }
   }
+
   async deleteBotMessages(messages: any[], delay: number) {
     for (const message of messages) {
       this.deleteBotMessage(message, delay);
     }
   }
   async telegramClient() {
-    const client = new TelegramClient(this.stringSession, this.apiId, this.apiHash, {
-      connectionRetries: 5,
-    });
+    const client = new TelegramClient(
+      this.stringSession,
+      this.apiId,
+      this.apiHash,
+      {
+        connectionRetries: 5,
+      },
+    );
     await client.start({
-      phoneNumber: async () => await input.text("Please enter your number: "),
-      password: async () => await input.text("Please enter your password: "),
+      phoneNumber: async () => await input.text('Please enter your number: '),
+      password: async () => await input.text('Please enter your password: '),
       phoneCode: async () =>
-        await input.text("Please enter the code you received: "),
-      onError: (err) =>
-
-        console.log(err),
+        await input.text('Please enter the code you received: '),
+      onError: (err) => console.log(err),
     });
     //  console.log("connected to telegram client");
     //  console.log(client.session.save()); // Save this string to avoid logging in again
@@ -1019,18 +1162,20 @@ export class
           justClear: true,
           revoke: true,
           minDate: 43,
-        })
-      )
+        }),
+      );
 
-      const message = await msg.reply(`History deleted successfully at ${format(Date.now(), 'yyyy-MM-dd HH:mm:ss')}`, this.handleStart(msg));
+      const message = await msg.reply(
+        `History deleted successfully at ${format(
+          Date.now(),
+          'yyyy-MM-dd HH:mm:ss',
+        )}`,
+        this.handleStart(msg),
+      );
       this.deleteBotMessage(message, 3000);
-    }
-    catch (err) {
+    } catch (err) {
       console.error(err);
       await msg.reply(`Some thing went wrong`);
     }
   }
-
-
-
 }

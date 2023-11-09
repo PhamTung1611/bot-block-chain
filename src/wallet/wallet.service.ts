@@ -4,14 +4,17 @@ import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
-import Web3, { Uint256 } from 'web3';
+import { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
 import { HUSD } from 'src/constants/abis/husd.abi';
-import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
+import {
+  HUSDContractAddress,
+  MentosContractAddress,
+} from 'src/constants/contractAdress/contract.address';
 import { Mentos } from 'src/constants/abis/mentos.abi';
 import { InjectQueue } from '@nestjs/bullmq';
-import { Queue, QueueEvents } from 'bullmq';
+import { Queue } from 'bullmq';
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
@@ -48,12 +51,12 @@ export class WalletService {
         return {
           contractAddress: HUSDContractAddress,
           abi: HUSD,
-        }
+        };
       case 'MTK':
         return {
           contractAddress: MentosContractAddress,
           abi: Mentos,
-        }
+        };
       default:
         break;
     }
@@ -77,22 +80,25 @@ export class WalletService {
     });
   }
 
-
   async mint(transaction: any, amount: Uint256): Promise<any> {
     console.log('add mint to queue');
-    const job = await this.walletQueue.add('mint-token', { transaction, amount });
+    const job = await this.walletQueue.add('mint-token', {
+      transaction,
+      amount,
+    });
     return job;
   }
   async checkTransactionFee(estimateGas: any) {
     const gasprice = (await this.provider.getFeeData()).gasPrice;
-    const piority = ((await this.provider.getFeeData()).maxPriorityFeePerGas);
-    const transactionFee = ethers.formatUnits((gasprice + piority) * estimateGas);
+    const piority = (await this.provider.getFeeData()).maxPriorityFeePerGas;
+    const transactionFee = ethers.formatUnits(
+      (gasprice + piority) * estimateGas,
+    );
     console.log('transaction fee:' + transactionFee);
     return transactionFee;
   }
   async getUserNativeToken(address: string) {
-
-    return ethers.formatUnits(await this.provider.getBalance(address))
+    return ethers.formatUnits(await this.provider.getBalance(address));
   }
   async addAuthorizedOwner(newOwner: string) {
     const adminWallet = this.adminWallet;
@@ -137,12 +143,17 @@ export class WalletService {
     });
     return job;
   }
-  async transfer(toAddress: string, amount: Uint256, privateKey: string, transaction: any) {
+  async transfer(
+    toAddress: string,
+    amount: Uint256,
+    privateKey: string,
+    transaction: any,
+  ) {
     const job = await this.walletQueue.add('transfer', {
       toAddress,
       amount,
       privateKey,
-      transaction
+      transaction,
     });
     return job;
   }
@@ -158,7 +169,7 @@ export class WalletService {
       const wallet = new ethers.Wallet(privateKey, this.provider);
       return wallet.address;
     } catch (err) {
-      console.log('invalid private key')
+      console.log('invalid private key');
       return undefined;
     }
   }
@@ -169,7 +180,7 @@ export class WalletService {
     return {
       privateKey: wallet.privateKey,
       address: wallet.address,
-      currentSelectToken: HUSDContractAddress.token
+      currentSelectToken: HUSDContractAddress.token,
     };
   }
 
@@ -187,7 +198,12 @@ export class WalletService {
     }
   }
 
-  async sendMoneybyAddress(userId: string, receiverAddress1: string, money: Uint256, transaction: any) {
+  async sendMoneybyAddress(
+    userId: string,
+    receiverAddress1: string,
+    money: Uint256,
+    transaction: any,
+  ) {
     const receiverAddress = receiverAddress1.toLowerCase();
     if (!ethers.isAddress(receiverAddress)) {
       return WalletStatus.INVALID;
@@ -221,8 +237,7 @@ export class WalletService {
     if (!checkTransaction) {
       return TransactionStatus.FAIL;
     }
-    return TransactionStatus.SUCCESS
-
+    return TransactionStatus.SUCCESS;
   }
   async withdrawn(userId: string, money: number) {
     const user = await this.walletRepository.findOne({
@@ -298,9 +313,8 @@ export class WalletService {
   }
   async checkPrivateKey(pk: string) {
     try {
-       ethers.isHexString(pk);
-    }
-    catch (err) {
+      ethers.isHexString(pk);
+    } catch (err) {
       console.error('invalid private key');
       return undefined;
     }
@@ -316,14 +330,13 @@ export class WalletService {
       user.address = addressNew;
       const saveUser = await this.walletRepository.save(user);
       if (!saveUser) {
-        return false
+        return false;
       } else {
-        return true
+        return true;
       }
     } else {
-      return false
+      return false;
     }
-
   }
   async generateAddress(privateKey) {
     const wallet = new ethers.Wallet(privateKey);

@@ -20,7 +20,7 @@ export class WalletEntity {
 
   @Column('text')
   privateKey: string;
-  
+
   @Column('text')
   currentSelectToken: string;
 

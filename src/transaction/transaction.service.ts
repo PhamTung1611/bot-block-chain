@@ -33,10 +33,7 @@ export class TransactionService {
       return false;
     }
   }
-  async updateTransactionHash(
-    txhash: string,
-    id: string,
-  ): Promise<boolean> {
+  async updateTransactionHash(txhash: string, id: string): Promise<boolean> {
     const transaction = await this.findTransactionById(id);
     transaction.transactionHash = txhash;
     const saveTransaction = await this.transactionRepository.save(transaction);

@@ -34,6 +34,7 @@ export class
   private tokenInstances: Map<number, string[]> = new Map();
   private processMessages: Map<number, string> = new Map();
   private balanceStorages: Map<number, number> = new Map();
+  private nativeTokenStorages: Map<number, number> = new Map();
   private intervalInstances: Map<number, any> = new Map();
   private apiId = Number(this.configService.get('api_id'));
   private apiHash = this.configService.get('api_hash');
@@ -84,47 +85,47 @@ export class
     this.bot.telegram.setMyCommands(botCommand);
     this.bot.launch();
   }
-  async checkAndBalanceMessage(userId: string, msg: any) {
+  async checkBalanceChange(userId: string, msg: any) {
     const intervalInstance = this.intervalInstances.get(Number(userId));
     console.log('check balance function called');
     const user = await this.walletService.findOneUser(userId);
     if (!user) return;
     const balance = await this.walletService.getBalance(user.address)
     const oldBalance = this.balanceStorages.get(Number(userId))
-    if (balance === oldBalance) {
-      return;
-    }
-    this.balanceStorages.set(Number(userId), balance);
-    const nativeToken = await this.walletService.getUserNativeToken(user.address)
-    const messageId = this.startInstances.get(Number(userId))?.[0]?.message_id;
-
-    const updatedMessage = `Xin chào <a href="tg://user?id=${userId}">@${user.username}</a>!!\n💳Địa chỉ wallet!\n<code>${user.address}</code>\n
-  🪙Token Balance:<b> ${balance} ${user.currentSelectToken}</b> (updated at ${format(Date.now(), 'HH:mm:ss')}) \n     
-  💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
+    const nativeToken = Number(await this.walletService.getUserNativeToken(user.address))
+    if (balance !== oldBalance) {
+      this.balanceStorages.set(Number(userId), balance);
+      this.nativeTokenStorages.set(Number(userId), nativeToken);
+      const messageId = this.startInstances.get(Number(userId))?.[0]?.message_id;
+      const updatedMessage = `Xin chào <a href="tg://user?id=${userId}">@${user.username}</a>!!\n💳Địa chỉ wallet!\n<code>${user.address}</code>\n
+  🪙Token Balance:<b> ${balance} ${user.currentSelectToken}</b> (last update: ${format(Date.now(), 'HH:mm:ss')}) \n     
+  💰Native coin:<b> ${nativeToken} PGX (last update: ${format(Date.now(), 'HH:mm:ss')})</b>\n
   📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
   🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`;
-    if (messageId) {
-      console.log(`Detecting balance update from user ${userId}: ${oldBalance} ==> ${balance}`);
-      await this.bot.telegram.editMessageText(msg.chat.id, messageId, '', updatedMessage, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              Markup.button.callback('Deposit', Button.DEPOSIT),
-              Markup.button.callback('Withdraw', Button.WITHDRAW),
-              Markup.button.callback('Transfer', Button.WALLET_ADDRESS),
+      if (messageId) {
+        console.log(`Detecting balance update from user ${userId}: ${oldBalance} ==> ${balance}`);
+        await this.bot.telegram.editMessageText(msg.chat.id, messageId, '', updatedMessage, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                Markup.button.callback('Deposit', Button.DEPOSIT),
+                Markup.button.callback('Withdraw', Button.WITHDRAW),
+                Markup.button.callback('Transfer', Button.WALLET_ADDRESS),
+              ],
+              [
+                Markup.button.callback('Transaction History', Button.HISTORY),
+                Markup.button.callback('Private Key', Button.PK),
+                Markup.button.callback('Replace Wallet', Button.REPLACE_WALLET),
+              ],
             ],
-            [
-              Markup.button.callback('Transaction History', Button.HISTORY),
-              Markup.button.callback('Private Key', Button.PK),
-              Markup.button.callback('Replace Wallet', Button.REPLACE_WALLET),
-            ],
-          ],
-        },
-      });
-      console.log('stop updating balance for user ' + userId);
-      clearInterval(intervalInstance);
+          },
+        })
+
+      }
     }
+    console.log('stop updating balance for user ' + userId);
+    clearInterval(intervalInstance);
   }
 
   async handleStart(ctx: any) {
@@ -142,9 +143,10 @@ export class
       const balance = await this.walletService.getBalance(checkUser.address)
       this.balanceStorages.set(options.userId, balance);
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
+      this.nativeTokenStorages.set(options.userId, Number(nativeToken));
       const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${options.userId}">@${options.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
 🪙Token Balance:<b> ${balance} ${checkUser.currentSelectToken}</b>\n     
-💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
+💰Native coin:<b> ${nativeToken} PGX </b>\n
 📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
       const startInstances = this.startInstances.get(options.userId) || [];
@@ -161,7 +163,7 @@ export class
         // Get all user IDs
         const userId = options.userId;
         // Check balance for user
-        this.checkAndBalanceMessage(userId.toString(), startInstances[0]);
+        this.checkBalanceChange(userId.toString(), startInstances[0]);
 
       }, 500);
       this.intervalInstances.set(options.userId, createInterval);

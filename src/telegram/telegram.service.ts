@@ -147,6 +147,7 @@ export class TelegramService {
   }
 
   async handleStart(ctx: any) {
+    console.log(ctx)
     const options = {
       userId: ctx.update.message?.from.id || ctx.update.callback_query?.from.id,
       username:
@@ -280,7 +281,7 @@ export class TelegramService {
     }
     const tokenMenu = await msg.reply(
       `Current using ${user.currentSelectToken} token`,
-      Markup.inlineKeyboard([this.tokenArray, [Markup.button.callback('Add Token', Button.ADD_TOKEN)]])
+      Markup.inlineKeyboard([this.tokenArray])
     );
     const tokenInstances = this.tokenInstances.get(options.userId) || [];
     tokenInstances.push(tokenMenu);

@@ -338,7 +338,7 @@ export class WalletService {
       return false;
     }
   }
-  async generateAddress(privateKey) {
+  async generateAddress(privateKey:string) {
     const wallet = new ethers.Wallet(privateKey);
     const address = wallet.address;
     return address;

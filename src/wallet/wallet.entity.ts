@@ -3,18 +3,21 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  Index,
 } from 'typeorm';
 @Entity()
 export class WalletEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index({ unique: true })
   @Column('text')
   userId: string;
 
   @Column('text')
   username: string;
 
+  @Index({ unique: true })
   @Column('text')
   address: string;
 

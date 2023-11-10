@@ -1,29 +1,29 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
-
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+} from 'typeorm';
 @Entity()
 export class WalletEntity {
-    @PrimaryGeneratedColumn('uuid')
-    id: string;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-    @Column()
-    id_user:string;
+  @Column('text')
+  userId: string;
 
-    @Column()
-    user_name: string;
+  @Column('text')
+  username: string;
 
-    @Column()
-    address: string
+  @Column('text')
+  address: string;
 
-    @Column()
-    privateKey: string;
+  @Column('text')
+  privateKey: string;
+  
+  @Column('text')
+  currentSelectToken: string;
 
-    @Column()
-    publicKey: string;
-
-    @Column({default:0})
-    balance: string;
-
-    @Column('timestamp', { default: () => 'CURRENT_TIMESTAMP' })
-    create_date: Date;
-
+  @CreateDateColumn()
+  createdDate: Date;
 }

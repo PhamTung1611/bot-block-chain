@@ -1,10 +1,11 @@
 export enum WalletStatus {
-    NOT_ENOUGH_FUND = 'NOT_ENOUGH_FUND',
-    INVALID = ' INVALID',
-    SUCCESS = 'SUCCESS',
-    FAIL = 'FAIL',
-    NOT_FOUND ='NOT_FOUND',
-    FOUND='FOUND',
-    SELF='SELF',
-  }
-  
+  NOT_ENOUGH_FUND = 'NOT_ENOUGH_FUND',
+  NOT_ENOUGH_GAS = 'NOT_ENOUGH_GAS',
+  OK='OK',
+  INVALID = ' INVALID',
+  SUCCESS = 'SUCCESS',
+  FAIL = 'FAIL',
+  NOT_FOUND = 'NOT_FOUND',
+  FOUND = 'FOUND',
+  SELF = 'SELF',
+}

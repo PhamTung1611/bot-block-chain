@@ -1,0 +1,27 @@
+export const botCommand = [
+    {
+        command: 'clear',
+        description: 'clear history (using for development delete later)',
+    },
+
+    {
+        command: 'start',
+        description: 'start Menu',
+    },
+    {
+        command: 'info',
+        description: 'bot information',
+    },
+    {
+        command: 'help',
+        description: 'help action',
+    },
+    {
+        command: 'cancel',
+        description: 'cancel action',
+    },
+    {
+        command: 'token',
+        description: 'change token',
+    }
+]

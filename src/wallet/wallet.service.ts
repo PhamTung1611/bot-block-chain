@@ -228,7 +228,7 @@ export class WalletService {
     if (!checkTransaction) {
       return TransactionStatus.FAIL;
     }
-    if (sender.address == receiverAddress) {
+    if (sender.address.toLowerCase() === receiverAddress) {
       return WalletStatus.SELF;
     }
     if (balance < Number(money)) {

@@ -86,16 +86,18 @@ export class TelegramService {
     this.bot.launch();
   }
   async checkBalanceChange(userId: string, msg: any) {
-    const intervalInstance = this.intervalInstances.get(Number(userId));
-    console.log('check balance function called');
     const user = await this.walletService.findOneUser(userId);
-    if (!user) return;
+    if (!user) {
+      clearInterval(this.intervalInstances.get(Number(userId)));
+      return;
+    };
     const balance = await this.walletService.getBalance(user.address);
     const oldBalance = this.balanceStorages.get(Number(userId));
     const nativeToken = Number(
       await this.walletService.getUserNativeToken(user.address),
     );
-    if (balance !== oldBalance) {
+    const oldNativeToken = this.nativeTokenStorages.get(Number(userId));
+    if (balance !== oldBalance || oldNativeToken !== nativeToken) {
       this.balanceStorages.set(Number(userId), balance);
       this.nativeTokenStorages.set(Number(userId), nativeToken);
       const messageId = this.startInstances.get(Number(userId))?.[0]
@@ -138,9 +140,9 @@ export class TelegramService {
           },
         );
       }
-      console.log('stop updating balance for user ' + userId);
-      clearInterval(intervalInstance);
-      this.intervalthreshold.set(Number(userId), 0);
+      // console.log('stop updating balance for user ' + userId);
+      // clearInterval(intervalInstance);
+      // this.intervalthreshold.set(Number(userId), 0);
     }
   }
 
@@ -151,6 +153,7 @@ export class TelegramService {
         ctx.update.message?.from.first_name ||
         ctx.update.callback_query?.from.first_name,
     };
+
     const checkUser = await this.walletService.findOneUser(options.userId);
     if (!checkUser) {
       await ctx.replyWithHTML(
@@ -172,8 +175,10 @@ export class TelegramService {
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`,
         this.keyboardMarkup,
       );
+      //get start instance if exists
       const startInstances = this.startInstances.get(options.userId) || [];
       startInstances.push(message);
+      //now allow 2 start instances to coexist in one chat
       if (startInstances.length > 1) {
         startInstances.reverse();
         await this.deleteBotMessage(startInstances[1], 0);
@@ -181,30 +186,37 @@ export class TelegramService {
         console.log(`Delete start instance of user ${options.userId}`);
       }
       this.startInstances.set(options.userId, startInstances);
-      // Start balance check every n seconds
-      const intervalInstance = this.createinterval(
+      //clear intervaleverytime call new start Instance
+      const previousIntervalInstance = this.intervalInstances.get(Number(options.userId));
+      console.log('clear previous interval');
+      clearInterval(previousIntervalInstance);
+      // Start new instance check every n seconds
+      console.log('start new interval');
+      const newIntervalInstance = this.createinterval(
         options.userId,
-        500,
+        3000,
         startInstances[0],
       );
-      this.intervalInstances.set(options.userId, intervalInstance);
-      //this.intervalInstances.set(options.userId, createInterval);
+      this.intervalInstances.set(Number(options.userId), newIntervalInstance);
     }
   }
-  createinterval(userId: string, delay: number, startInstances: any) {
-    const createInterval = setInterval(() => {
-      //add function need to update data here
-      this.checkBalanceChange(userId.toString(), startInstances);
-      let callCount = this.intervalthreshold.get(Number(userId)) || 0;
-      callCount++;
-
-      if (callCount >= 5) {
-        clearInterval(createInterval);
-        this.intervalthreshold.set(Number(userId), 0);
-        console.log(`Stopped interval for user ${userId}`);
-      }
-      this.intervalthreshold.set(Number(userId), callCount);
-    }, delay);
+  async createinterval(userId: string, delay: number, startInstances: any) {
+    const startTimes = [];
+    let intervalInstance = setInterval(async () => {
+      const startTime = performance.now();
+      await this.checkBalanceChange(userId.toString(), startInstances);
+      const endTime = performance.now();
+      console.log('startTime: ' + startTime);
+      console.log('endtime: ' + endTime);
+      startTimes.push(endTime - startTime);
+      const delay = Math.min(...startTimes);
+      console.log('update new delay: ' + delay);
+      // Update the interval delay
+      clearInterval(intervalInstance);
+      intervalInstance = setInterval(async () => {
+        await this.checkBalanceChange(userId.toString(), startInstances);
+      }, delay + 1000);
+    }, 1000);
   }
   async handleMessage(msg: any) {
     const options = {
@@ -268,11 +280,11 @@ export class TelegramService {
     }
     const tokenMenu = await msg.reply(
       `Current using ${user.currentSelectToken} token`,
-      Markup.inlineKeyboard([this.tokenArray, [Markup.button.callback('Add Token', Button.ADD_TOKEN),
-      Markup.button.callback('Delete Token', Button.DELETE_TOKEN)]])
+      Markup.inlineKeyboard([this.tokenArray, [Markup.button.callback('Add Token', Button.ADD_TOKEN)]])
     );
     const tokenInstances = this.tokenInstances.get(options.userId) || [];
     tokenInstances.push(tokenMenu);
+    //not allow 2 token instances to coexist in one user chat
     if (tokenInstances.length > 1) {
       tokenInstances.reverse();
       await this.deleteBotMessage(tokenInstances[1], 0);
@@ -385,12 +397,12 @@ export class TelegramService {
       case Button.REPLACE_WALLET:
         await this.handleReplaceWallet(msg, data, options, checkUser);
         break;
-      case Button.ADD_TOKEN:
-        await this.handleAddTokenButton(msg, data, options, checkUser);
-        break;
-      case Button.DELETE_TOKEN:
-        await this.handleDeleteTokenButton(msg);
-        break;
+      // case Button.ADD_TOKEN:
+      //   await this.handleAddTokenButton(msg, data, options, checkUser);
+      //   break;
+      // case Button.DELETE_TOKEN:
+      //   await this.handleDeleteTokenButton(msg);
+      //   break;
       default:
         await this.cacheManager.del(options.userId);
         const messages = [];
@@ -405,11 +417,13 @@ export class TelegramService {
         break;
     }
   }
+  //not implemented yet
   async handleDeleteTokenButton(msg: any) {
     //delete and update button array
-   await msg.reply('Delete token');
+    await msg.reply('Delete token');
   }
-  async handleAddTokenButton(msg: any,data:any,options:any,checkUser:any) {
+  //not implemented yet
+  async handleAddTokenButton(msg: any, data: any, options: any, checkUser: any) {
     //add button to array 
     this.tokenArray.push(Markup.button.callback('Test', 'Test'));
   }
@@ -441,7 +455,7 @@ export class TelegramService {
   ): Promise<boolean> {
     if (!Number(options.text)) {
       const message = msg.replyWithHTML(
-        'Số tiền nhập không hợp lệ \nExamples: <s>một trăm nghìn</s>,<s>100 000 </s>,<s>100!@!#$!</s> \nĐể hủy thao tác nhập lệnh /cancel',
+        'Số tiền nhập không hợp lệ!  \nExamples: <s>một trăm nghìn</s>,<s>100 000 </s>,<s>100!@!#$!</s> \nNhập lại hoặc để hủy thao tác nhập lệnh /cancel',
       );
       this.deleteBotMessage(message, 5000);
       return false;
@@ -536,8 +550,8 @@ export class TelegramService {
       const Money = options.text;
       if (!Number(Money)) {
         await this.cacheManager.del(options.userId);
-        const message = await msg.replyWithHTML(
-          'Số tiền nhập không hợp lệ (10,1,0.1,0.001 --> hợp lệ , <s>100 000 </s>) --> không hợp lệ',
+        const message = msg.replyWithHTML(
+          'Số tiền nhập không hợp lệ!  \nExamples: <s>một trăm nghìn</s>,<s>100 000 </s>,<s>100!@!#$!</s> \nNhập lại hoặc để hủy thao tác nhập lệnh /cancel',
         );
         messages.push(message);
       }
@@ -745,10 +759,8 @@ export class TelegramService {
     if (data.action === Action.SEND_MONEY_ADDRESS) {
       const money = options.text;
       if (!Number(money)) {
-        await this.cacheManager.del(options.userId);
-        const message = await msg.reply(
-          'Vui lòng thực hiện lại',
-          this.handleStart(msg),
+        const message = msg.replyWithHTML(
+          'Số tiền nhập không hợp lệ!  \nExamples: <s>một trăm nghìn</s>,<s>100 000 </s>,<s>100!@!#$!</s> \nNhập lại hoặc để hủy thao tác nhập lệnh /cancel',
         );
         this.deleteBotMessage(message, 5000);
         return;

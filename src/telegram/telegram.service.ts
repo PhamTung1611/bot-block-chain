@@ -349,6 +349,15 @@ export class
     const messages = [];
     const transaction = await this.createDepositTransaction(options, data, msg);
     await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
+    if (data.money.toString().length > 65) {
+      const message = await msg.reply(`Số tiền quá lớn Vui lòng nhập lại`);
+      await this.deleteBotMessage(message, 3000);
+      await this.transactionService.updateTransactionState(
+        TransactionStatus.FAIL,
+        transaction.id,
+      );
+      return;
+    }
     //mint token
     const mint = await this.walletService.mint(transaction.senderAddress, data.money);
 

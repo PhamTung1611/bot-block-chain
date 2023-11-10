@@ -3,8 +3,10 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  Index
 } from 'typeorm';
 @Entity()
+@Index(['userId'])
 export class WalletEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;

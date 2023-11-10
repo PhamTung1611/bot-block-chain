@@ -26,6 +26,7 @@ import { StringSession } from "telegram/sessions";
 import input from "input";
 import { botCommand } from 'src/constants/commands/telegram.commands';
 import { sleep } from 'telegram/Helpers';
+import * as bcrypt from 'bcrypt';
 var utils = require('ethereumjs-util')
 @Injectable()
 export class
@@ -376,13 +377,13 @@ export class
   async handleWithDrawAction(msg: any, options: any, data: DataCache) {
     const messages = [];
     if (data.step === 1) {
-      const Money = options.text;
-      if (!Number(Money)) {
+      const money = options.text;
+      if (!Number(money)) {
         await this.cacheManager.del(options.userId);
         const message = await msg.reply('Vui lòng thực hiện lại');
         messages.push(message);
       }
-      if (Number(Money) && Number(Money) > 0) {
+      if (Number(money) && Number(money) > 0) {
         data.money = options.text;
         data.step = 2;
         await this.cacheManager.set(options.userId, data, 30000);
@@ -740,6 +741,10 @@ export class
       username: msg.chat.first_name,
     };
     messages.push(await msg.reply(`Tạo tài khoản cho user ${user.userId}...`));
+    // const hashedPrivatekey = await this.hashPrivateKey(wallet.privateKey);
+    // const jsonData = 
+    // console.log(1611,hashedPrivatekey);
+    
     const createAccount = await this.walletService.createWallet(
       {
         ...wallet,
@@ -962,6 +967,11 @@ export class
     }
   }
 
+  async hashPrivateKey(privateKey:string):Promise<string>{
+    const saltRounds = 10;
+    const hashedPrivateKey = await bcrypt.hash(privateKey, saltRounds);
+    return hashedPrivateKey;
+  }
 
 
 }

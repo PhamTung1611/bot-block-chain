@@ -16,5 +16,6 @@ export enum Button {
   DELETE = "DELETE",
   IMPORT = "IMPORT",
   REPLACE_WALLET = "REPLACE_WALLET",
-  PK = "PK"
+  PK = "PK",
+  FORGOT_PASSWORD = "FORGOT_PASSWORD"
 }

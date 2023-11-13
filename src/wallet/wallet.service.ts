@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
-import { WalletStatus } from './wallet.status.enum';
+import { WalletStatus } from './enum/wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import Web3, { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
@@ -13,6 +13,7 @@ import { Mentos } from 'src/constants/abis/mentos.abi';
 import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
 import * as bcrypt from 'bcrypt';
+import { WalletNotFoundException } from 'src/exception/wallet.exception';
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
@@ -136,7 +137,7 @@ export class WalletService {
     });
     if (wallet) {
 
-      return await this.decryptPrivateKey('password', Buffer.from(wallet.iv,'hex'), Buffer.from(wallet.privateKey,'hex'));
+      return await this.decryptPrivateKey(this.configService.get('encryption_pass'), Buffer.from(wallet.iv,'hex'), Buffer.from(wallet.privateKey,'hex'));
     }
     return false;
   }
@@ -144,7 +145,7 @@ export class WalletService {
 
   async encryptPrivateKey(privateKey: string) {
     const iv = randomBytes(16);
-    const password = 'password';
+    const password = this.configService.get('encryption_pass');
     const key = (await promisify(scrypt)(password, 'salt', 32)) as Buffer;
     const cipher = createCipheriv('aes-256-ctr', key, iv);
 
@@ -379,9 +380,9 @@ export class WalletService {
       },
     });
     if (!checkUser) {
-      return WalletStatus.NOT_FOUND;
+      throw new WalletNotFoundException();
     }
-    const privateKey = await this.decryptPrivateKey('password',Buffer.from(checkUser.iv,'hex'),Buffer.from(checkUser.privateKey,'hex'))
+    const privateKey = await this.decryptPrivateKey(this.configService.get('encryption_pass'),Buffer.from(checkUser.iv,'hex'),Buffer.from(checkUser.privateKey,'hex'))
     return privateKey;
   }
   async checkAddressContract(addressToCheck: string) {
@@ -418,7 +419,7 @@ export class WalletService {
     }
 
   }
-  async generateAddress(privateKey) {
+  async generateAddress(privateKey:string) {
     const wallet = new ethers.Wallet(privateKey);
     const address = wallet.address;
     return address;

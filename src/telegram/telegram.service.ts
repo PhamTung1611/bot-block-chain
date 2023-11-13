@@ -6,7 +6,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { TransactionService } from 'src/transaction/transaction.service';
 import { WalletService } from 'src/wallet/wallet.service';
-import { WalletStatus } from 'src/wallet/wallet.status.enum';
+import { WalletStatus } from 'src/wallet/enum/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
@@ -69,7 +69,9 @@ export class
     [Markup.button.callback('Wallet address', Button.WALLET_ADDRESS)],
     [Markup.button.callback('Cancel', Button.CANCEL)],
   ]);
-
+  private forgotPassword = Markup.inlineKeyboard([
+    [Markup.button.callback('Forgot Password', Button.FORGOT_PASSWORD)],
+  ])
   constructor(
     private transactionService: TransactionService,
     private walletService: WalletService,
@@ -85,7 +87,7 @@ export class
 
   }
 
-  async handleStart(ctx: any) {
+  async handleStart(ctx:any) {
     const options = {
       userId: ctx.update.message?.from.id || ctx.update.callback_query?.from.id,
       username: ctx.update.message?.from.first_name || ctx.update.callback_query?.from.first_name,
@@ -281,6 +283,9 @@ export class
       case Button.REPLACE_WALLET:
         await this.handleReplaceWallet(msg, data, options, checkUser);
         break;
+      case Button.FORGOT_PASSWORD:
+        await this.handleForgotPasswordButton(msg);
+      break;
       default:
         await this.cacheManager.del(options.userId);
         const messages = [];
@@ -292,6 +297,9 @@ export class
         await this.deleteBotMessages(messages, 5000);
         break;
     }
+  }
+  async handleForgotPasswordButton(msg: any) {
+    await msg.reply('Coming soon');
   }
   //Action Handler
   async handleDepositAction(
@@ -420,6 +428,7 @@ export class
           await this.transactionService.createTransaction(createTransaction);
         const balance = await this.walletService.getBalance(address);
         if (Number(balance) < Number(data.money)) {
+
           await this.cacheManager.del(options.userId);
           const message = await msg.reply(`Tài khoản không đủ tiền`);
           messages.push(message);
@@ -879,13 +888,14 @@ export class
     }
     if (data.action === '') {
       this.setCache(options, Action.PRIVATE_KEY, 1);
-      messages.push(await msg.reply(`Nhập mật khấu để xem ví`))
+      messages.push(await msg.reply(`Enter your password to see your private key: `,this.forgotPassword))
     } else {
       console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.PRIVATE_KEY, 1);
-      messages.push(await msg.reply(`Nhập mật khấu để xem ví`))
+      messages.push(await msg.reply(`Enter your password to see your private key: `,this.forgotPassword))
     }
+    await this.deleteBotMessages(messages,30000);
   }
   async handlePrivateKeyAction(  msg: any,
     options: any,

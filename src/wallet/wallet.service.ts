@@ -15,6 +15,7 @@ import {
 import { Mentos } from 'src/constants/abis/mentos.abi';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import * as crypto from 'crypto';
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
@@ -112,17 +113,21 @@ export class WalletService {
         address: address,
       },
     });
+
     if (wallet) {
       return wallet.privateKey.toString();
     }
     return false;
   }
+
+  
   async getBalance(address: string) {
     const user = await this.walletRepository.findOne({
       where: {
         address: address,
       },
     });
+
     const userToken = this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
@@ -134,6 +139,7 @@ export class WalletService {
     const balance = await contract.balanceOf(address);
     return Number(ethers.formatEther(balance));
   }
+
 
   async burn(amount: Uint256, privateKey: string, transaction: any) {
     const job = await this.walletQueue.add('burn-token', {
@@ -338,7 +344,7 @@ export class WalletService {
       return false;
     }
   }
-  async generateAddress(privateKey:string) {
+  async generateAddress(privateKey: string) {
     const wallet = new ethers.Wallet(privateKey);
     const address = wallet.address;
     return address;

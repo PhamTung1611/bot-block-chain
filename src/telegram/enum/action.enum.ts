@@ -14,5 +14,6 @@ export enum Action {
   CHANGE_TOKEN = 'Change token',
   REPLACE_WALLET = 'REPLACE_WALLET',
   NOTTHING = '',
-  IMPORT = "IMPORT"
+  IMPORT = "IMPORT",
+  PRIVATE_KEY = "PRIVATE_KEY"
 }

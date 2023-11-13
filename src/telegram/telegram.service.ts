@@ -215,6 +215,12 @@ export class
       case Action.IMPORT:
         await this.handleImportAction(msg, options, data)
         break;
+      case Action.CREATE:
+        await this.handleCreateAccountAction(msg, options, data)
+        break;
+      case Action.PRIVATE_KEY:
+        await this.handlePrivateKeyAction(msg, options, data);
+        break;
       default:
         this.cacheManager.del(options.userId);
         const message = await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
@@ -380,14 +386,14 @@ export class
   async handleWithDrawAction(msg: any, options: any, data: DataCache) {
     const messages = [];
     if (data.step === 1) {
-      const Money = options.text;
-      if (!Number(Money)) {
+      const input = options.text;
+      if (!Number(input)) {
         await this.cacheManager.del(options.userId);
         const message = await msg.reply('Vui lòng thực hiện lại');
         messages.push(message);
       }
-      if (Number(Money) && Number(Money) > 0) {
-        data.money = options.text;
+      if (Number(input) && Number(input) > 0) {
+        data.money = input;
         data.step = 2;
         await this.cacheManager.set(options.userId, data, 30000);
       } else {
@@ -679,68 +685,71 @@ export class
       this.deleteBotMessage(message, 10000)
     }
   }
+
   async handleImportAction(msg: any, options: any, data: DataCache) {
-    const input = msg.update.message.text
     const user = {
       userId: msg.chat.id,
       username: msg.chat.first_name,
     };
-    await this.cacheManager.del(options.userId);
-    const address = await this.walletService.generateWalletFromPrivateKey(input);
-    if (!address) {
-      const message = await msg.replyWithHTML(
-        `Private Key sai cú pháp Vui lòng nhập lại\n (Example: 0xFFFFFFFFFFFFF****************FD2E8CD0364140)`,
+    if (data.action == Action.IMPORT && data.step === 1) {
+      const input = msg.update.message.text
+      await this.cacheManager.del(options.userId);
+      const address = await this.walletService.generateWalletFromPrivateKey(input);
+      if (!address) {
+        const message = await msg.replyWithHTML(
+          `Private Key sai cú pháp Vui lòng nhập lại\n (Example: 0xFFFFFFFFFFFFF****************FD2E8CD0364140)`,
+        )
+        this.deleteBotMessage(message, 10000);
+        return;
+      }
+      const encryptedPrivateKey = await this.walletService.encryptPrivateKey(options.text);
+      const createWallet = {
+        userId: user.userId,
+        username: user.username,
+        password: 'Unavailable',
+        address: address,
+        privateKey: encryptedPrivateKey.encryptedPrivateKey.toString('hex'),
+        iv: encryptedPrivateKey.iv.toString('hex'),
+        currentSelectToken: 'HUSD',
+      }
+      await this.walletService.createWallet(createWallet, address);
+      this.setCache(options, Action.IMPORT, 2);
+      const message = await msg.reply(
+        `Vui lòng nhập mật khẩu mới cho ví!`
       )
       this.deleteBotMessage(message, 10000);
-      return;
     }
-    const wallet = {
-      privateKey: input,
-      address: address,
-      currentSelectToken: 'HUSD',
-    }
-    await msg.reply(`Import ví cho user ${user.userId}...`);
-    const createAccount = await this.walletService.createWallet(
-      {
-        ...wallet,
-        ...user,
-      },
-      address,
-    );
-    if (createAccount) {
-      await msg.reply(
-        `Import thành công!`,
-        this.handleStart(msg),
-      )
-      await this.cacheManager.del(options.userId);
-    } else {
-      await msg.reply(
-        `Lỗi`,
-      )
+
+    if (data.action == Action.IMPORT && data.step === 2) {
+      await msg.reply(`Import ví cho user ${user.userId}...`);
+     const update= this.walletService.updatePassword(options.text,user.userId);
+      if (update) {
+        await msg.reply(
+          `Import thành công!`,
+          this.handleStart(msg),
+        )
+        await this.cacheManager.del(options.userId);
+      } else {
+        await msg.reply(
+          `Lỗi`,
+        )
+      }
     }
   }
-  async handleCreateAccountButton(
-    msg: any,
+
+  async handleCreateAccountAction(msg: any,
     options: any,
-    data: DataCache,
-    checkUser: any,
-  ) {
+    data: DataCache) {
     const messages = [];
     if (data.action !== '') {
       await this.cacheManager.del(options.userId);
     }
-    if (checkUser) {
-      await this.cacheManager.del(options.userId);
-      messages.push(await msg.reply(
-        'Bạn đã có tài khoản vui lòng thực hiện chức năng khác',
-        this.handleStart(msg),
-      ));
-      return;
-    }
+    const password = await this.walletService.hashPassword(options.text);
     const wallet = await this.walletService.generateNewWallet();
     const user = {
       userId: msg.chat.id,
       username: msg.chat.first_name,
+      password: password
     };
     messages.push(await msg.reply(`Tạo tài khoản cho user ${user.userId}...`));
     const createAccount = await this.walletService.createWallet(
@@ -758,6 +767,28 @@ export class
       await this.cacheManager.del(options.userId);
     }
     await this.deleteBotMessages(messages, 5000);
+  }
+  async handleCreateAccountButton(
+    msg: any,
+    options: any,
+    data: DataCache,
+    checkUser: any,
+  ) {
+    const messages = [];
+    if (checkUser) {
+      messages.push(await msg.reply(`Đã có tài khoản! Vui lòng thực hiện hành động khác`, this.handleStart(msg)));
+    }
+    if (data.action === '') {
+      this.setCache(options, Action.CREATE, 1);
+      messages.push(await msg.reply(`Nhập mật khấu mới cho ví`))
+    } else {
+      console.log(`Canceling ${data.action}`);
+      await this.cacheManager.del(options.userId);
+      this.setCache(options, Action.CREATE, 1);
+      messages.push(await msg.reply(`Nhập mật khấu mới cho ví`))
+    }
+
+    this.deleteBotMessages(messages, 10000);
   }
   async handleDepositButton(
     msg: any,
@@ -842,21 +873,39 @@ export class
     data: any,
     checkUser: any,
   ) {
+    const messages =[];
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
-    if (data.action !== '') {
+    if (data.action === '') {
+      this.setCache(options, Action.PRIVATE_KEY, 1);
+      messages.push(await msg.reply(`Nhập mật khấu để xem ví`))
+    } else {
       console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
-      this.setCache(options, Action.INFORMATION, 1);
+      this.setCache(options, Action.PRIVATE_KEY, 1);
+      messages.push(await msg.reply(`Nhập mật khấu để xem ví`))
     }
-    // const info = await this.walletService.checkInformation(options.userId);
+  }
+  async handlePrivateKeyAction(  msg: any,
+    options: any,
+    data: any){
+      if(data.action !== Action.PRIVATE_KEY){
+        return;
+      }
+      const hashPassword=(await this.walletService.findOneUser(options.userId)).password ;
+     const isPassword = await this.walletService.verifyPassword(options.text,hashPassword);
+     if(isPassword) {
     const address = await this.walletService.getAddressById(options.userId);
     const tempMessage = await msg.reply('🗝Here is your private key (Dont share it to others)')
-    const message = await msg.replyWithHTML(`<tg-spoiler> ${await this.walletService.getPrivateKey(address)} </tg-spoiler>`, this.deleteButton);
+    const message = await msg.replyWithHTML(`<tg-spoiler>${await this.walletService.getPrivateKey(address)}</tg-spoiler>`, this.deleteButton);
     this.deleteBotMessage(tempMessage, 5000);
     this.processMessages.set(message.message_id, message);
     await this.cacheManager.del(options.userId);
+    return;
+    }
+    const tempMessage = await msg.reply('Wrong Password! Try again (to cancel action type /cancel)')
+    this.deleteBotMessage(tempMessage, 5000);
   }
   async handleWalletAddressButton(
     msg: any,
@@ -899,7 +948,7 @@ export class
   async handleDeleteButton(msg: any) {
     const messageId = msg.update.callback_query?.message.message_id || msg.update.message?.message_id;
     const message = this.processMessages.get(messageId)
-    console.log('Deleting message id='+messageId);
+    console.log('Deleting message id=' + messageId);
     await this.deleteBotMessage(message, 0);
   }
   async deleteBotMessage(message: any, delay: number) {

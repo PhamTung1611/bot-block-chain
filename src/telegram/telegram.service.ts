@@ -87,7 +87,7 @@ export class
 
   }
 
-  async handleStart(ctx:any) {
+  async handleStart(ctx: any) {
     const options = {
       userId: ctx.update.message?.from.id || ctx.update.callback_query?.from.id,
       username: ctx.update.message?.from.first_name || ctx.update.callback_query?.from.first_name,
@@ -223,6 +223,9 @@ export class
       case Action.PRIVATE_KEY:
         await this.handlePrivateKeyAction(msg, options, data);
         break;
+      case Action.FORGOT_PASSWORD:
+        await this.handleForgotPasswordAction(msg, options, data);
+        break;
       default:
         this.cacheManager.del(options.userId);
         const message = await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
@@ -230,6 +233,7 @@ export class
         break;
     }
   }
+
 
   async handleButton(msg: any) {
     const options = {
@@ -284,8 +288,8 @@ export class
         await this.handleReplaceWallet(msg, data, options, checkUser);
         break;
       case Button.FORGOT_PASSWORD:
-        await this.handleForgotPasswordButton(msg);
-      break;
+        await this.handleForgotPasswordButton(msg, data, options, checkUser);
+        break;
       default:
         await this.cacheManager.del(options.userId);
         const messages = [];
@@ -298,9 +302,7 @@ export class
         break;
     }
   }
-  async handleForgotPasswordButton(msg: any) {
-    await msg.reply('Coming soon');
-  }
+
   //Action Handler
   async handleDepositAction(
     msg: any,
@@ -663,6 +665,24 @@ export class
       this.deleteBotMessage(message, 3000);
     }
   }
+  async handleForgotPasswordAction(msg: any, options: any, data: DataCache) {
+    const wallet = await this.walletService.findOneUser(options.userId);
+    if (data.action === Action.FORGOT_PASSWORD && data.step === 1) {
+      const isVerified = await this.walletService.verifyBackupPhrase(options.text, wallet.address);
+      if (isVerified) {
+        await this.setCache(options, Action.FORGOT_PASSWORD, 2);
+        await msg.reply('Enter your new password:');
+        return;
+      }
+      await msg.reply('some thing wrong with your mnemonic! Please try again !');
+      return;
+    }
+    if (data.action === Action.FORGOT_PASSWORD && data.step === 2) {
+     await this.walletService.updatePassword(options.text, options.userId);
+     await msg.reply('Your password has been updated',this.handleStart(msg));
+    }
+
+  }
   //Button Handler
   async setCache(options: any, action: Action, step: number) {
     await this.cacheManager.set(
@@ -731,7 +751,7 @@ export class
 
     if (data.action == Action.IMPORT && data.step === 2) {
       await msg.reply(`Import ví cho user ${user.userId}...`);
-     const update= this.walletService.updatePassword(options.text,user.userId);
+      const update = this.walletService.updatePassword(options.text, user.userId);
       if (update) {
         await msg.reply(
           `Import thành công!`,
@@ -761,6 +781,8 @@ export class
       password: password
     };
     messages.push(await msg.reply(`Tạo tài khoản cho user ${user.userId}...`));
+    const message = await msg.replyWithHTML(`Recovery phrase dùng phòng khi bạn quên mật khẩu hãy lưu lại ở đâu đó trong máy bạn: \n <code>${wallet.mnemonic}</code>`, this.deleteButton);
+    this.processMessages.set(message.message_id, message);
     const createAccount = await this.walletService.createWallet(
       {
         ...wallet,
@@ -798,6 +820,22 @@ export class
     }
 
     this.deleteBotMessages(messages, 10000);
+  }
+  async handleForgotPasswordButton(msg: any, data: any, options: any, checkUser: any) {
+    if (!checkUser) {
+      return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+    }
+    if (data.action === '') {
+      this.setCache(options, Action.FORGOT_PASSWORD, 1);
+      const finalMessage = await msg.reply('Hãy nhập vào Recovery phrase:');
+      this.deleteBotMessage(finalMessage, 10000)
+    } else {
+      console.log(`Canceling ${data.action}`);
+      await this.cacheManager.del(options.userId);
+      this.setCache(options, Action.FORGOT_PASSWORD, 1);
+      const message = await msg.reply('Hãy nhập vào Recovery phrase:');
+      this.deleteBotMessage(message, 10000)
+    }
   }
   async handleDepositButton(
     msg: any,
@@ -882,37 +920,37 @@ export class
     data: any,
     checkUser: any,
   ) {
-    const messages =[];
+    const messages = [];
     if (!checkUser) {
       return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
     }
     if (data.action === '') {
       this.setCache(options, Action.PRIVATE_KEY, 1);
-      messages.push(await msg.reply(`Enter your password to see your private key: `,this.forgotPassword))
+      messages.push(await msg.reply(`Enter your password to see your private key: `, this.forgotPassword))
     } else {
       console.log(`Canceling ${data.action}`);
       await this.cacheManager.del(options.userId);
       this.setCache(options, Action.PRIVATE_KEY, 1);
-      messages.push(await msg.reply(`Enter your password to see your private key: `,this.forgotPassword))
+      messages.push(await msg.reply(`Enter your password to see your private key: `, this.forgotPassword))
     }
-    await this.deleteBotMessages(messages,30000);
+    await this.deleteBotMessages(messages, 30000);
   }
-  async handlePrivateKeyAction(  msg: any,
+  async handlePrivateKeyAction(msg: any,
     options: any,
-    data: any){
-      if(data.action !== Action.PRIVATE_KEY){
-        return;
-      }
-      const hashPassword=(await this.walletService.findOneUser(options.userId)).password ;
-     const isPassword = await this.walletService.verifyPassword(options.text,hashPassword);
-     if(isPassword) {
-    const address = await this.walletService.getAddressById(options.userId);
-    const tempMessage = await msg.reply('🗝Here is your private key (Dont share it to others)')
-    const message = await msg.replyWithHTML(`<tg-spoiler>${await this.walletService.getPrivateKey(address)}</tg-spoiler>`, this.deleteButton);
-    this.deleteBotMessage(tempMessage, 5000);
-    this.processMessages.set(message.message_id, message);
-    await this.cacheManager.del(options.userId);
-    return;
+    data: any) {
+    if (data.action !== Action.PRIVATE_KEY) {
+      return;
+    }
+    const hashPassword = (await this.walletService.findOneUser(options.userId)).password;
+    const isPassword = await this.walletService.verifyPassword(options.text, hashPassword);
+    if (isPassword) {
+      const address = await this.walletService.getAddressById(options.userId);
+      const tempMessage = await msg.reply('🗝Here is your private key (Dont share it to others)')
+      const message = await msg.replyWithHTML(`<tg-spoiler>${await this.walletService.getPrivateKey(address)}</tg-spoiler>`, this.deleteButton);
+      this.deleteBotMessage(tempMessage, 5000);
+      this.processMessages.set(message.message_id, message);
+      await this.cacheManager.del(options.userId);
+      return;
     }
     const tempMessage = await msg.reply('Wrong Password! Try again (to cancel action type /cancel)')
     this.deleteBotMessage(tempMessage, 5000);

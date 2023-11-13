@@ -261,7 +261,8 @@ export class WalletService {
       privateKey: encryptedPrivateKey.encryptedPrivateKey.toString('hex'),
       iv: encryptedPrivateKey.iv.toString('hex'),
       address: wallet.address,
-      currentSelectToken: HUSDContractAddress.token
+      currentSelectToken: HUSDContractAddress.token,
+      mnemonic:wallet.mnemonic.phrase
     };
   }
 
@@ -418,6 +419,14 @@ export class WalletService {
       return false
     }
 
+  }
+  async verifyBackupPhrase(mnemonic:string,address:string) {
+    const wallet = Wallet.fromPhrase(mnemonic);
+    if(wallet.address === address){
+      console.log('address matched')
+      return true;
+    }
+    return false;
   }
   async generateAddress(privateKey:string) {
     const wallet = new ethers.Wallet(privateKey);

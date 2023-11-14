@@ -198,7 +198,7 @@ export class
   async handleChangingToken(token: string, msg: Context, userInfo: UserInfo) {
     await this.walletService.changeToken(token, userInfo.userId.toString());
     const message = await msg.reply(`changed to token ${token}`);
-    this.handleStart(msg);
+    await this.handleStart(msg);
     await this.deleteBotMessage(message, 5000);
   }
   async handleUserAction(msg: any, userInfo: UserInfo, data: DataCache) {
@@ -553,18 +553,18 @@ export class
     if (!checkPrivateKey) {
       const finalMessage = await msg.reply('Không đúng định dạng PrivateKey, Vui lòng nhập lại. Để hủy nhập /cancel');
       this.deleteBotMessage(finalMessage, 10000)
-      this.handleStart(msg)
+      await this.handleStart(msg)
     } else {
       const update = await this.walletService.updateAddress(userId, pk)
       if (!update) {
         const finalMessage = await msg.reply('Không thành công');
         this.deleteBotMessage(finalMessage, 10000)
-        this.handleStart(msg)
+        await this.handleStart(msg)
         await this.cacheManager.del(userId);
       } else {
         const finalMessage = await msg.reply('Thành công');
         this.deleteBotMessage(finalMessage, 10000)
-        this.handleStart(msg)
+        await this.handleStart(msg)
         await this.cacheManager.del(userId);
       }
     }
@@ -795,11 +795,11 @@ export class
   }
 
   async handleCreateAccountAction(msg: Context,
-    userInfo: any,
+    userInfo: UserInfo,
     data: DataCache) {
     const messages = [];
     if (data.action !== '') {
-      await this.cacheManager.del(userInfo.userId);
+      await this.cacheManager.del(userInfo.userId.toString());
     }
     const password = await this.walletService.hashPassword(userInfo.text);
     const wallet = await this.walletService.generateNewWallet();
@@ -829,7 +829,7 @@ export class
       `Tạo tài khoản thành công!`
     ));
     await this.handleStart(msg)
-    await this.cacheManager.del(userInfo.userId);
+    await this.cacheManager.del(userInfo.userId.toString());
     await this.deleteBotMessages(messages, 5000);
   }
   async handleCreateAccountButton(

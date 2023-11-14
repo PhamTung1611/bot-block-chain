@@ -542,7 +542,7 @@ export class
   async handleReplaceWalletAction(msg: Context, userInfo: UserInfo, data: DataCache) {
     const user = await this.walletService.findOneUser(userInfo.userId.toString());
     const userId = userInfo.userId.toString();
-    const pk = Object(msg.message).text
+    const pk = Object(msg.message).text;
     console.log(pk);
     if (pk === user.privateKey) {
       const finalMessage = await msg.reply('Bạn đang sử dụng ví này Vui lòng nhập lại. Để hủy nhập /cancel');
@@ -554,7 +554,6 @@ export class
       const finalMessage = await msg.reply('Không đúng định dạng PrivateKey, Vui lòng nhập lại. Để hủy nhập /cancel');
       this.deleteBotMessage(finalMessage, 10000)
       this.handleStart(msg)
-
     } else {
       const update = await this.walletService.updateAddress(userId, pk)
       if (!update) {
@@ -696,15 +695,16 @@ export class
         await msg.reply('Enter your new password:');
         return;
       }
-      await msg.reply('some thing wrong with your mnemonic! Please try again !');
+      await msg.replyWithHTML(`<b>Mã recovery của bạn nhập vào không ổn! Hãy thử lại!</b>\n Nếu bạn import hoặc thay ví riêng của bạn:\n Hãy sử dụng mã mnemic của riêng bản thân!!`);
+      this.setCache(userInfo, Action.FORGOT_PASSWORD, 1);
       return;
     }
     if (data.action === Action.FORGOT_PASSWORD && data.step === 2) {
       await this.walletService.updatePassword(userInfo.text, userId);
       await msg.reply('Your password has been updated');
       await this.handleStart(msg)
+      this.cacheManager.del(userId);
     }
-
   }
   //Button Handler
   async setCache(userInfo: UserInfo, action: Action, step: number) {
@@ -714,9 +714,10 @@ export class
         action: action,
         step: step,
       },
-      30000,
+      60000,
     );
   }
+
   async handleImportAccountButton(msg: Context, data: DataCache, userInfo: UserInfo) {
     this.setCache(userInfo, Action.IMPORT, 1);
     const finalMessage = await msg.replyWithHTML(`Vui lòng nhập privateKey của ví bạn muốn import`);
@@ -739,7 +740,6 @@ export class
   }
 
   async handleImportAction(msg: Context, userInfo: UserInfo, data: DataCache) {
-    console.log(this.identify(msg.chat));
     const user = {
       userId: msg.chat.id,
       username: Object(msg.chat).first_name,
@@ -822,7 +822,7 @@ export class
     }
     const createAccount = await this.walletService.createWallet(createWallet, wallet.address);
     if (!createAccount) {
-     await msg.reply('Wallet creation failed! some error occurred');
+      await msg.reply('Wallet creation failed! some error occurred');
       return createAccount;
     }
     messages.push(await msg.reply(
@@ -980,7 +980,9 @@ export class
     if (isPassword) {
       const address = await this.walletService.getAddressById(userId);
       const tempMessage = await msg.reply('🗝Here is your private key (Dont share it to others)')
-      const message = await msg.replyWithHTML(`<tg-spoiler>${await this.walletService.getPrivateKey(address)}</tg-spoiler>`, this.deleteButton);
+      const privateKey = await this.walletService.getPrivateKey(address);
+      console.log(privateKey);
+      const message = await msg.replyWithHTML(`<tg-spoiler>${privateKey}</tg-spoiler>`, this.deleteButton);
       this.deleteBotMessage(tempMessage, 5000);
       this.processMessages.set(message.message_id, message);
       await this.cacheManager.del(userId);
@@ -1025,7 +1027,6 @@ export class
     }
     await this.cacheManager.del(userInfo.userId.toString());
     const finalMessage = await msg.reply('Hủy giao dịch thành công', this.keyboardMarkup);
-    console.log(this.identify(finalMessage));
     this.deleteBotMessage(finalMessage, 30000)
   }
   async handleDeleteButton(msg: Context) {

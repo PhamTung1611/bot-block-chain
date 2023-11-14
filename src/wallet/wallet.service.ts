@@ -418,12 +418,14 @@ export class WalletService {
   }
   async updateAddress(userId: string, privateKey: string) {
     const addressNew = await this.generateAddress(privateKey);
-    const checkPk = await this.walletRepository.findOne({
-      where: { privateKey: privateKey },
+    const checkAccount = await this.walletRepository.findOne({
+      where: { address: addressNew },
     });
-    if (!checkPk) {
+    if (!checkAccount) {
       const user = await this.findOneUser(userId);
-      user.privateKey = privateKey;
+      const encryptedPrivateKey= await this.encryptPrivateKey(privateKey);
+      user.privateKey =  encryptedPrivateKey.encryptedPrivateKey.toString('hex');
+      user.iv=encryptedPrivateKey.iv.toString('hex');
       user.address = addressNew;
       const saveUser = await this.walletRepository.save(user);
       if (!saveUser) {
@@ -437,12 +439,17 @@ export class WalletService {
 
   }
   async verifyBackupPhrase(mnemonic: string, address: string) {
+    try{
     const wallet = Wallet.fromPhrase(mnemonic);
     if (wallet.address === address) {
       console.log('address matched')
       return true;
     }
     return false;
+  }catch(err){
+    console.log('wrong mnemic format')
+    return false;
+  }
   }
   async generateAddress(privateKey: string) {
     const wallet = new ethers.Wallet(privateKey);

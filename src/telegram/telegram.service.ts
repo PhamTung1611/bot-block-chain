@@ -116,7 +116,7 @@ export class
       const nativeToken = await this.walletService.getUserNativeToken(checkUser.address)
       const message = await ctx.replyWithHTML(`Xin chào <a href="tg://user?id=${userInfo.userId}">@${userInfo.username}</a>!!\n💳Địa chỉ wallet!\n<code>${checkUser.address}</code>\n
 🪙Token Balance:<b> ${balance} ${checkUser.currentSelectToken}</b>\n     
-💰Hiện Tài khoản bạn đang có:<b> ${nativeToken} PGX </b>\n
+💰Native coin:<b> ${nativeToken} PGX </b>\n
 📊Theo dõi giao dịch <a href="https://testnet.miraiscan.io"><u>click here</u>!</a>\n 
 🎟️Nạp thêm <b>PGX</b> <a href="https://faucet.miraichain.io/"><u>click here</u>!</a>`, this.keyboardMarkup);
       const startInstances = this.startInstances.get(userInfo.userId) || [];

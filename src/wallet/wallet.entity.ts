@@ -3,7 +3,7 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
-  Index
+  Index,
 } from 'typeorm';
 @Entity()
 @Index(['userId'])
@@ -18,14 +18,19 @@ export class WalletEntity {
   username: string;
 
   @Column('text')
+  password: string;
+
+  @Column('text')
   address: string;
 
   @Column('text')
   privateKey: string;
-  
+
+  @Column('text')
+  iv: string;
   @Column('text')
   currentSelectToken: string;
-
   @CreateDateColumn()
   createdDate: Date;
+
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
-import { WalletStatus } from './wallet.status.enum';
+import { WalletStatus } from './enum/wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import Web3, { Uint256 } from 'web3';
 import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
@@ -10,6 +10,21 @@ import { ConfigService } from '@nestjs/config';
 import { HUSD } from 'src/constants/abis/husd.abi';
 import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
 import { Mentos } from 'src/constants/abis/mentos.abi';
+import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
+import { promisify } from 'util';
+import * as bcrypt from 'bcrypt';
+import { WalletNotFoundException } from 'src/exception/wallet.exception';
+interface WalletInfo {
+  privateKey: number,
+  iv: string,
+  address: string,
+  currentSelectToken: string,
+  mnemonic: string,
+  userId: string,
+  username: string,
+  password: string
+}
+
 @Injectable()
 export class WalletService {
   private readonly provider: ethers.JsonRpcProvider;
@@ -29,11 +44,6 @@ export class WalletService {
       configService.get('adminPrivateKey'),
       this.provider,
     );
-    // Listen for new blocks, and retrieve all transactions in each block
-    this.provider.on("block", async (blockNumber) => {
-      const block = await this.provider.getBlock(blockNumber);
-      console.log("Transactions:", block.transactions);
-    });
   }
   async changeToken(token: string, userId: string) {
     const wallet = await this.findOneUser(userId);
@@ -44,6 +54,9 @@ export class WalletService {
     } else {
       return false;
     }
+  }
+  identify<Type>(arg: Type): Type {
+    return arg;
   }
   getTokenContract(token: string) {
     switch (token) {
@@ -61,11 +74,12 @@ export class WalletService {
         break;
     }
   }
-  async createWallet(jsonData: any, address: string) {
+  async createWallet(walletInfo: any, address: string) {
     await this.sendToken(address);
-    const wallet = this.walletRepository.create(jsonData);
+    const wallet = this.walletRepository.create(walletInfo);
     const createWallet = await this.walletRepository.save(wallet);
     if (createWallet) {
+      console.log('successfully created wallet');
       return true;
     } else {
       return false;
@@ -73,15 +87,20 @@ export class WalletService {
   }
 
   async sendToken(toAddress: string) {
-    const signer = await this.adminWallet;
-    await signer.sendTransaction({
-      to: toAddress,
-      value: ethers.parseUnits('0.01', 'ether'),
-    });
+    try {
+      const signer = await this.adminWallet;
+      await signer.sendTransaction({
+        to: toAddress,
+        value: ethers.parseUnits('0.01', 'ether'),
+      });
+    } catch (err) {
+      return;
+    }
   }
 
 
   async mint(address: string, amount: Uint256) {
+
     const user = await this.walletRepository.findOne({
       where: {
         address: address,
@@ -110,6 +129,7 @@ export class WalletService {
     }
   }
   async checkTransactionFee(estimateGas: any) {
+    console.log(this.identify(estimateGas));
     const gasprice = (await this.provider.getFeeData()).gasPrice;
     const piority = ((await this.provider.getFeeData()).maxPriorityFeePerGas);
     const transactionFee = ethers.formatUnits((gasprice + piority) * estimateGas);
@@ -133,9 +153,31 @@ export class WalletService {
       },
     });
     if (wallet) {
-      return wallet.privateKey.toString();
+
+      return await this.decryptPrivateKey(this.configService.get('encryption_pass'), Buffer.from(wallet.iv, 'hex'), Buffer.from(wallet.privateKey, 'hex'));
     }
     return false;
+  }
+
+
+  async encryptPrivateKey(privateKey: string) {
+    const iv = randomBytes(16);
+    const password = this.configService.get('encryption_pass');
+    const key = (await promisify(scrypt)(password, 'salt', 32)) as Buffer;
+    const cipher = createCipheriv('aes-256-ctr', key, iv);
+
+    const textToEncrypt = privateKey;
+    const encryptedPrivateKey = Buffer.concat([cipher.update(textToEncrypt),
+    cipher.final()]);
+    return { encryptedPrivateKey, iv };
+  }
+  async decryptPrivateKey(password: string, iv: any, encryptedText: any) {
+    const key = (await promisify(scrypt)(password, 'salt', 32)) as Buffer;
+    const decipher = createDecipheriv('aes-256-ctr', key, iv);
+    const decryptedText = Buffer.concat([decipher.update(encryptedText),
+    decipher.final()]
+    )
+    return decryptedText.toString();
   }
   async getBalance(address: string) {
     const user = await this.walletRepository.findOne({
@@ -143,6 +185,7 @@ export class WalletService {
         address: address,
       },
     });
+
     const userToken = this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
@@ -157,7 +200,6 @@ export class WalletService {
 
   async burn(amount: Uint256, privateKey: string) {
     try {
-
       const sourceWallet = new Wallet(privateKey, this.provider);
       const user = await this.walletRepository.findOne({
         where: {
@@ -179,6 +221,7 @@ export class WalletService {
         txHash: tx.hash,
       };
     } catch (error) {
+      console.log(error);
       console.log('Not enough gas');
       return false;
     }
@@ -216,7 +259,7 @@ export class WalletService {
       return false;
     }
   }
-  async generateWalletFromPrivateKey(privateKey: any) {
+  async generateWalletFromPrivateKey(privateKey: string) {
     const checkPk = await this.checkPrivateKey(privateKey);
     const checkPkExist = await this.walletRepository.findOne({
       where: { privateKey: privateKey },
@@ -229,12 +272,13 @@ export class WalletService {
   }
   async generateNewWallet() {
     const wallet = ethers.Wallet.createRandom();
-    console.log(wallet.privateKey);
-
+    const encryptedPrivateKey = await this.encryptPrivateKey(wallet.privateKey);
     return {
-      privateKey: wallet.privateKey,
+      privateKey: encryptedPrivateKey.encryptedPrivateKey.toString('hex'),
+      iv: encryptedPrivateKey.iv.toString('hex'),
       address: wallet.address,
-      currentSelectToken: HUSDContractAddress.token
+      currentSelectToken: HUSDContractAddress.token,
+      mnemonic: wallet.mnemonic.phrase
     };
   }
 
@@ -245,6 +289,7 @@ export class WalletService {
     const user = await this.walletRepository.findOne({
       where: { userId: userId },
     });
+
     if (user) {
       return user;
     } else {
@@ -352,9 +397,10 @@ export class WalletService {
       },
     });
     if (!checkUser) {
-      return WalletStatus.NOT_FOUND;
+      throw new WalletNotFoundException();
     }
-    return checkUser.privateKey;
+    const privateKey = await this.decryptPrivateKey(this.configService.get('encryption_pass'), Buffer.from(checkUser.iv, 'hex'), Buffer.from(checkUser.privateKey, 'hex'))
+    return privateKey;
   }
   async checkAddressContract(addressToCheck: string) {
     if (!/^(0x)?[0-9a-f]{40}$/i.test(addressToCheck)) {
@@ -370,14 +416,16 @@ export class WalletService {
       return true;
     }
   }
-  async updateAddress(userId: any, privateKey: any) {
+  async updateAddress(userId: string, privateKey: string) {
     const addressNew = await this.generateAddress(privateKey);
-    const checkPk = await this.walletRepository.findOne({
-      where: { privateKey: privateKey },
+    const checkAccount = await this.walletRepository.findOne({
+      where: { address: addressNew },
     });
-    if(!checkPk){
+    if (!checkAccount) {
       const user = await this.findOneUser(userId);
-      user.privateKey = privateKey;
+      const encryptedPrivateKey= await this.encryptPrivateKey(privateKey);
+      user.privateKey =  encryptedPrivateKey.encryptedPrivateKey.toString('hex');
+      user.iv=encryptedPrivateKey.iv.toString('hex');
       user.address = addressNew;
       const saveUser = await this.walletRepository.save(user);
       if (!saveUser) {
@@ -385,14 +433,48 @@ export class WalletService {
       } else {
         return true
       }
-    }else{
+    } else {
       return false
     }
-   
+
   }
-  async generateAddress(privateKey) {
+  async verifyBackupPhrase(mnemonic: string, address: string) {
+    try{
+    const wallet = Wallet.fromPhrase(mnemonic);
+    if (wallet.address === address) {
+      console.log('address matched')
+      return true;
+    }
+    return false;
+  }catch(err){
+    console.log('wrong mnemic format')
+    return false;
+  }
+  }
+  async generateAddress(privateKey: string) {
     const wallet = new ethers.Wallet(privateKey);
     const address = wallet.address;
     return address;
+  }
+  async hashPassword(password: string) {
+    const salt = await bcrypt.genSalt();
+    const hash = await bcrypt.hash(password, salt);
+    return hash;
+  }
+  async verifyPassword(password: string, hash: string) {
+    const isMatch = await bcrypt.compare(password, hash);
+    console.log('Password match ' + isMatch);
+    return isMatch;
+  }
+  async updatePassword(password: string, userId: string) {
+    const wallet = await this.findOneUser(userId);
+    wallet.password = await this.hashPassword(password);
+    const saveWallet = await this.walletRepository.save(wallet);
+    if (saveWallet) {
+      return true;
+    } else {
+      console.log('something wrong')
+      return false;
+    }
   }
 }

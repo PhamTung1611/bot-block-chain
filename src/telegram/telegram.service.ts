@@ -96,7 +96,10 @@ export class
     this.bot.launch();
 
   }
-
+  //Use to indentify type
+  identify<Type>(arg: Type): Type {
+    return arg;
+  }
   async handleStart(ctx: Context) {
     const userInfo = {
       userId: ctx.message?.from.id || ctx.callbackQuery?.from.id,
@@ -128,9 +131,6 @@ export class
     }
   }
 
-  identify<Type>(arg: Type): Type {
-    return arg;
-  }
   async handleMessage(msg: Context<Update>) {
     const userInfo = {
       userId: msg.message.from.id,
@@ -765,7 +765,11 @@ export class
         iv: encryptedPrivateKey.iv.toString('hex'),
         currentSelectToken: 'HUSD',
       }
-      await this.walletService.createWallet(createWallet, address);
+      const isCreated = await this.walletService.createWallet(createWallet, address);
+      if (!isCreated) {
+        msg.reply('Wallet creation failed! some error occurred');
+        return isCreated;
+      }
       this.setCache(userInfo, Action.IMPORT, 2);
       const message = await msg.reply(
         `Vui lòng nhập mật khẩu mới cho ví!`
@@ -779,7 +783,6 @@ export class
       if (update) {
         await msg.reply(
           `Import thành công!`,
-
         )
         await this.handleStart(msg);
         await this.cacheManager.del(userInfo.userId.toString());
@@ -808,20 +811,25 @@ export class
     messages.push(await msg.reply(`Tạo tài khoản cho user ${user.userId}...`));
     const message = await msg.replyWithHTML(`Recovery phrase dùng phòng khi bạn quên mật khẩu hãy lưu lại ở đâu đó trong máy bạn: \n <code>${wallet.mnemonic}</code>`, this.deleteButton);
     this.processMessages.set(message.message_id, message);
-    const createAccount = await this.walletService.createWallet(
-      {
-        ...wallet,
-        ...user,
-      },
-      wallet.address,
-    );
-    if (createAccount) {
-      messages.push(await msg.reply(
-        `Tạo tài khoản thành công!`
-      ));
-      await this.handleStart(msg)
-      await this.cacheManager.del(userInfo.userId);
+    const createWallet = {
+      userId: user.userId.toString(),
+      username: user.username,
+      password: password,
+      address: wallet.address,
+      privateKey: wallet.privateKey,
+      iv: wallet.iv,
+      currentSelectToken: 'HUSD',
     }
+    const createAccount = await this.walletService.createWallet(createWallet, wallet.address);
+    if (!createAccount) {
+     await msg.reply('Wallet creation failed! some error occurred');
+      return createAccount;
+    }
+    messages.push(await msg.reply(
+      `Tạo tài khoản thành công!`
+    ));
+    await this.handleStart(msg)
+    await this.cacheManager.del(userInfo.userId);
     await this.deleteBotMessages(messages, 5000);
   }
   async handleCreateAccountButton(
@@ -904,8 +912,7 @@ export class
       await this.cacheManager.del(userInfo.userId.toString());
       this.setCache(userInfo, Action.WITHDRAW, 1);
       const finalMessage = await msg.reply('Bạn muốn rút bao nhiêu tiền');
-      this.deleteBotMessage(finalMessage, 10000)
-
+      this.deleteBotMessage(finalMessage, 10000);
     }
   }
   async handleHistoryButton(

@@ -400,7 +400,7 @@ export class WalletService {
       return true;
     }
   }
-  async updateAddress(userId: any, privateKey: any) {
+  async updateAddress(userId: string, privateKey: string) {
     const addressNew = await this.generateAddress(privateKey);
     const checkPk = await this.walletRepository.findOne({
       where: { privateKey: privateKey },

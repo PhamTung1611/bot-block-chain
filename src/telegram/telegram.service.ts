@@ -4,23 +4,23 @@ import {
 } from 'telegraf';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { TransactionService } from 'src/transaction/transaction.service';
-import { WalletService } from 'src/wallet/wallet.service';
-import { WalletStatus } from 'src/wallet/enum/wallet.status.enum';
+import { TransactionService } from '../transaction/transaction.service';
+import { WalletService } from '../wallet/wallet.service';
+import { WalletStatus } from '../wallet/enum/wallet.status.enum';
 import { Button } from './enum/button.enum';
 import { Action } from './enum/action.enum';
-import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
+import { TransactionStatus } from '../transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
 import { format } from 'date-fns'
 import { Api } from "telegram/tl"
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import input from "input";
-import { botCommand } from 'src/constants/commands/telegram.commands';
+import { botCommand } from '../constants/commands/telegram.commands';
 import { sleep } from 'telegram/Helpers';
 import { Update, User } from 'telegraf/typings/core/types/typegram';
 import { Any } from 'typeorm';
-import { WalletEntity } from 'src/wallet/wallet.entity';
+import { WalletEntity } from '../wallet/wallet.entity';
 import { Wallet } from 'ethers';
 
 interface DataCache {

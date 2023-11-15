@@ -5,15 +5,15 @@ import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './enum/wallet.status.enum';
 import { Contract, ethers, Wallet } from 'ethers';
 import Web3, { Uint256 } from 'web3';
-import { TransactionStatus } from 'src/transaction/enum/transaction.enum';
+import { TransactionStatus } from '../transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
-import { HUSD } from 'src/constants/abis/husd.abi';
-import { HUSDContractAddress, MentosContractAddress } from 'src/constants/contractAdress/contract.address';
-import { Mentos } from 'src/constants/abis/mentos.abi';
+import { HUSD } from '../constants/abis/husd.abi';
+import { HUSDContractAddress, MentosContractAddress } from '../constants/contractAdress/contract.address';
+import { Mentos } from '../constants/abis/mentos.abi';
 import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
 import * as bcrypt from 'bcrypt';
-import { WalletNotFoundException } from 'src/exception/wallet.exception';
+import { WalletNotFoundException } from '../exception/wallet.exception';
 interface WalletInfo {
   privateKey: number,
   iv: string,
@@ -119,6 +119,7 @@ export class WalletService {
       address,
       this.convertToEther(Number(amount)),
     )
+    console.log(this.identify(txResponse));
     if (txResponse) {
       return {
         status: true,
@@ -153,7 +154,6 @@ export class WalletService {
       },
     });
     if (wallet) {
-
       return await this.decryptPrivateKey(this.configService.get('encryption_pass'), Buffer.from(wallet.iv, 'hex'), Buffer.from(wallet.privateKey, 'hex'));
     }
     return false;
@@ -185,7 +185,6 @@ export class WalletService {
         address: address,
       },
     });
-
     const userToken = this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
@@ -289,7 +288,6 @@ export class WalletService {
     const user = await this.walletRepository.findOne({
       where: { userId: userId },
     });
-
     if (user) {
       return user;
     } else {
@@ -353,13 +351,16 @@ export class WalletService {
   }
 
   async checkAddress(userId: string) {
-    const checkUser = await this.walletRepository.findOne({
-      where: {
-        userId: userId,
-      },
-    });
-
-    return checkUser.address;
+    try {
+      const checkUser = await this.walletRepository.findOne({
+        where: {
+          userId: userId,
+        },
+      });
+      return checkUser.address;
+    } catch (error) {
+      return undefined;
+    }
   }
 
   async checkWalletByAddress(address: string) {
@@ -397,7 +398,7 @@ export class WalletService {
       },
     });
     if (!checkUser) {
-      throw new WalletNotFoundException();
+      return undefined;
     }
     const privateKey = await this.decryptPrivateKey(this.configService.get('encryption_pass'), Buffer.from(checkUser.iv, 'hex'), Buffer.from(checkUser.privateKey, 'hex'))
     return privateKey;
@@ -423,9 +424,9 @@ export class WalletService {
     });
     if (!checkAccount) {
       const user = await this.findOneUser(userId);
-      const encryptedPrivateKey= await this.encryptPrivateKey(privateKey);
-      user.privateKey =  encryptedPrivateKey.encryptedPrivateKey.toString('hex');
-      user.iv=encryptedPrivateKey.iv.toString('hex');
+      const encryptedPrivateKey = await this.encryptPrivateKey(privateKey);
+      user.privateKey = encryptedPrivateKey.encryptedPrivateKey.toString('hex');
+      user.iv = encryptedPrivateKey.iv.toString('hex');
       user.address = addressNew;
       const saveUser = await this.walletRepository.save(user);
       if (!saveUser) {
@@ -439,17 +440,17 @@ export class WalletService {
 
   }
   async verifyBackupPhrase(mnemonic: string, address: string) {
-    try{
-    const wallet = Wallet.fromPhrase(mnemonic);
-    if (wallet.address === address) {
-      console.log('address matched')
-      return true;
+    try {
+      const wallet = Wallet.fromPhrase(mnemonic);
+      if (wallet.address === address) {
+        console.log('address matched')
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.log('wrong mnemic format')
+      return false;
     }
-    return false;
-  }catch(err){
-    console.log('wrong mnemic format')
-    return false;
-  }
   }
   async generateAddress(privateKey: string) {
     const wallet = new ethers.Wallet(privateKey);

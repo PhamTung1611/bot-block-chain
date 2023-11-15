@@ -257,7 +257,7 @@ export class WalletService {
         this.convertToEther(Number(amount)),
       );
       // Log the transaction hash
-      console.log(tx);
+      console.log(tx.hash);
       return tx.hash;
     } catch (error) {
       if (error.message.includes('insufficient funds for intrinsic transaction cost ')) {

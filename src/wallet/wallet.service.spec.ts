@@ -4,15 +4,31 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 import { ConfigService } from '@nestjs/config';
-import { Wallet } from 'ethers';
 import { WalletStatus } from './enum/wallet.status.enum';
 import { ethers } from 'ethers';
-import { HUSD } from '../constants/abis/husd.abi';
+
 jest.mock('ethers', () => ({
   ...jest.requireActual('ethers'),
   Wallet: jest.fn(),
   Contract: jest.fn(),
 }));
+// Mock dependencies
+const providerMock = new ethers.JsonRpcProvider('https://rpc1-testnet.miraichain.io/');
+const ethersMock = { Contract: jest.fn(), Wallet: jest.fn() };
+const configServiceMock = {
+  get: jest.fn(() => 'mockPrivateKey'),
+};
+
+const contractMock = {
+  burn: jest.fn(),
+};
+const createWallet = (privateKey: string) => {
+  const sourceWallet = new ethers.Wallet(privateKey, providerMock);
+  // ... perform additional initialization or setup if needed
+  return sourceWallet;
+};
+
+const executeBurnMock = jest.fn();
 describe('WalletService', () => {
   let walletService: WalletService;
   let walletRepository: Repository<WalletEntity>;
@@ -27,7 +43,12 @@ describe('WalletService', () => {
           useClass: Repository,
         },
       ],
-    }).compile();
+    }).overrideProvider(ethers.Wallet)
+      .useValue(ethersMock.Wallet)
+      .overrideProvider(ethers.Contract)
+      .useValue(ethersMock.Contract)
+      .compile();
+
 
     walletService = module.get<WalletService>(WalletService);
     walletRepository = module.get<Repository<WalletEntity>>(getRepositoryToken(WalletEntity));
@@ -89,63 +110,133 @@ describe('WalletService', () => {
     })
   })
   describe('mint', () => {
-    it('should mint tokens successfully', async () => {
-      // Mocking data
-      const address = 'user123';
+    it('should mint tokens successfully assuming minting contract is successful', async () => {
+      // Arrange
+      const userId = 'user123';
       const amount = 100;
-      const existWallet = { id: '1', userId: 'user123', username: 'Hoang', address: '123', privateKey: '123', currentSelectToken: 'HUSD', iv: '123', password: '123' } as WalletEntity;
-      const userToken = {
-        contractAddress: {
-          token: 'HUSD',
-          address: '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09',
-          description: 'Hien Tokens USD'
-        }, abi: HUSD
-      };
-      const txResponse = { hash: 'transactionHash' };
+      const existWallet = {
+        id: '1',
+        userId: userId,
+        username: 'Hoang',
+        address: '123',
+        privateKey: '123',
+        currentSelectToken: 'HUSD',
+        iv: '123',
+        password: '123',
+      } as WalletEntity;
 
-      // Mocking wallet repository
-      jest.spyOn(walletRepository, 'findOne').mockResolvedValueOnce(existWallet);
-
-      // Mocking getTokenContract method
-      jest.spyOn(walletService, 'getTokenContract').mockReturnValueOnce(userToken);
-
-      const result = await walletService.mint(address, amount.toString());
-
-      // Assertions
-      expect(walletRepository.findOne).toHaveBeenCalledWith({ where: { address } });
-      expect(walletService.getTokenContract).toHaveBeenCalledWith(existWallet.currentSelectToken);
-      expect(result).toEqual({ status: true, txhash: txResponse.hash });
+      jest.spyOn(walletRepository, 'findOne').mockResolvedValue(existWallet);
+      // Mock the contract instance and its methods
+      ethersMock.Contract.mockReturnValue({
+        mint: jest.fn().mockResolvedValue('mockedTxHash'),
+      });
+      // Mock the executeMint method success at minting token
+      jest.spyOn(walletService, 'executeMint').mockResolvedValue('mockedTxHash');
+      // Act
+      const result = await walletService.mintTokens(existWallet.address, amount.toString());
+      // Assert
+      expect(result).toEqual('mockedTxHash');
+      expect(walletRepository.findOne).toHaveBeenCalledWith({ where: { address: existWallet.address } });
+      expect(walletService.executeMint).toHaveBeenCalledWith(
+        expect.any(Object), // Contract instance
+        existWallet.address,
+        amount.toString(),
+      );
     });
+    it('should fail to  mint tokens assuming minting contract is failed', async () => {
 
-    it('should return false if minting fails', async () => {
-      // Mocking data
-      const address = 'user123';
+      // Arrange
+      const userId = 'user123';
       const amount = 100;
-      const existWallet = { id: '1', userId: 'user123', username: 'Hoang', address: '123', privateKey: '123', currentSelectToken: 'HUSD', iv: '123', password: '123' } as WalletEntity;
-      const userToken = {
-        contractAddress: {
-          token: 'HUSD',
-          address: '0xc1D60AEe7247d9E3F6BF985D32d02f7b6c719D09',
-          description: 'Hien Tokens USD'
-        }, abi: HUSD
-      };
-
-      // Mocking wallet repository
-      jest.spyOn(walletRepository, 'findOne').mockResolvedValueOnce(existWallet);
-
-      // Mocking getTokenContract method
-      jest.spyOn(walletService, 'getTokenContract').mockReturnValueOnce(userToken);
-
-      // Mocking ethers.Contract and mint method to simulate failure
-      (ethers.Contract as jest.Mock).mockImplementationOnce(() => ({
-        mint: jest.fn().mockRejectedValue(new Error('Minting failed')),
-      }));
-
-      // Execute the mint function
-      const result = await walletService.mint(address, amount.toString());
-
-      // Assertions
-      expect(result).toBe(false);
-    });
+      const existWallet = {
+        id: '1',
+        userId: userId,
+        username: 'Hoang',
+        address: '123',
+        privateKey: '123',
+        currentSelectToken: 'HUSD',
+        iv: '123',
+        password: '123',
+      } as WalletEntity;
+      jest.spyOn(walletRepository, 'findOne').mockResolvedValue(existWallet);
+      // Mock the executeMint method fail
+      const executeMintError = new Error('Mocked minting error');
+      jest.spyOn(walletService, 'executeMint').mockRejectedValue(executeMintError);
+      // Act and Assert
+      await expect(walletService.mintTokens(existWallet.address, amount.toString())).rejects.toThrowError('Mocked minting error');
+      expect(walletRepository.findOne).toHaveBeenCalledWith({ where: { address: existWallet.address } });
+    })
   });
+  describe('burn token', () => {
+    it('should successfully return transaction hash assumint minting is successfull', async () => {
+      // Arrange
+      const userId = 'user123';
+      const amount = 100;
+      const privateKey = '0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
+
+      // Create a wallet with a valid address
+      const sourceWalletMock = createWallet(privateKey);
+
+      const existWallet = {
+        id: '1',
+        userId: userId,
+        username: 'Hoang',
+        address: sourceWalletMock.address, // Set the address from the created wallet
+        privateKey: privateKey,
+        currentSelectToken: 'HUSD',
+        iv: '123',
+        password: '123',
+      } as WalletEntity;
+      // Mock the findOne method to resolve with the existing wallet
+      jest.spyOn(walletRepository, 'findOne').mockResolvedValue(existWallet);
+
+      ethersMock.Contract.mockReturnValue({
+        burn: jest.fn().mockResolvedValue('mockedTxHash'),
+      });
+
+      // Mock the executeBurn method success at burning token
+      jest.spyOn(walletService, 'executeBurn').mockResolvedValue('mockedTxHash');
+
+      // Act
+      const result = await walletService.burn(amount.toString(), existWallet.privateKey);
+
+      // Assert
+      expect(result).toEqual('mockedTxHash');
+      expect(walletRepository.findOne).not.toEqual(undefined);
+      expect(walletService.executeBurn).toHaveBeenCalledWith(
+        expect.any(Object), // Contract instance
+        amount.toString(),
+      );
+    })
+    it('should return undefinded asumint burning tokens failed', async () => {
+      // Arrange
+      const userId = 'user123';
+      const amount = 100;
+      const privateKey = '0x8736861a248663f0ed9a8d30e04fdd90645e3924d8a4b14593df3c92feb498e3';
+
+      // Create a wallet with a valid address
+      const sourceWalletMock = createWallet(privateKey);
+
+      const existWallet = {
+        id: '1',
+        userId: userId,
+        username: 'Hoang',
+        address: sourceWalletMock.address, // Set the address from the created wallet
+        privateKey: privateKey,
+        currentSelectToken: 'HUSD',
+        iv: '123',
+        password: '123',
+      } as WalletEntity;
+      jest.spyOn(walletRepository, 'findOne').mockResolvedValue(existWallet);
+      const executeMintError = new Error('Mocked burning error');
+      jest.spyOn(walletService, 'executeBurn').mockRejectedValue(executeMintError);
+      // Act and Assert
+      await expect(walletService.burn(amount.toString(), existWallet.privateKey)).rejects.toThrowError('Mocked burning error');
+      expect(walletRepository.findOne).not.toEqual(undefined);
+      expect(walletService.executeBurn).toHaveBeenCalledWith(
+        expect.any(Object), // Contract instance
+        amount.toString(),
+      );
+    })
+  })
 });

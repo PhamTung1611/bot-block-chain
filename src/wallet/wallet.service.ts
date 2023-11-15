@@ -97,10 +97,7 @@ export class WalletService {
       return;
     }
   }
-
-
-  async mint(address: string, amount: Uint256) {
-
+  async mintTokens(address: string, amount: Uint256): Promise<string | undefined> {
     const user = await this.walletRepository.findOne({
       where: {
         address: address,
@@ -109,30 +106,23 @@ export class WalletService {
     const userToken = this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
-    const sourceWallet = new Wallet(
-      this.configService.get('adminPrivateKey'),
-      this.provider,
-    );
+
+    const sourceWallet = new Wallet(this.configService.get('adminPrivateKey'), this.provider);
     const contract = new ethers.Contract(contractAddress, contractAbi, sourceWallet);
-    console.log('execute mint contract')
-    const txResponse = await contract.mint(
-      address,
-      this.convertToEther(Number(amount)),
-    )
-    console.log(this.identify(txResponse));
-    if (txResponse) {
-      return {
-        status: true,
-        txhash: txResponse.hash
-      };
-    } else {
-      return false;
-    }
+    return await this.executeMint(contract, user.address, amount);
   }
-  async checkTransactionFee(estimateGas: any) {
+
+  async executeMint(contract: ethers.Contract, address: string, amount: Uint256): Promise<string | undefined> {
+    const txResponse = await contract.mint(address, this.convertToEther(Number(amount)))
+    if (!txResponse) {
+      return undefined;
+    }
+    return txResponse.hash
+  }
+  async checkTransactionFee(estimateGas: number) {
     console.log(this.identify(estimateGas));
-    const gasprice = (await this.provider.getFeeData()).gasPrice;
-    const piority = ((await this.provider.getFeeData()).maxPriorityFeePerGas);
+    const gasprice = Number((await this.provider.getFeeData()).gasPrice);
+    const piority = Number(((await this.provider.getFeeData()).maxPriorityFeePerGas));
     const transactionFee = ethers.formatUnits((gasprice + piority) * estimateGas);
     console.log('transaction fee:' + transactionFee);
     return transactionFee;
@@ -154,7 +144,11 @@ export class WalletService {
       },
     });
     if (wallet) {
-      return await this.decryptPrivateKey(this.configService.get('encryption_pass'), Buffer.from(wallet.iv, 'hex'), Buffer.from(wallet.privateKey, 'hex'));
+      const decryptedPrivatekey = await this.decryptPrivateKey(
+        this.configService.get('encryption_pass'),
+        Buffer.from(wallet.iv, 'hex'), Buffer.from(wallet.privateKey, 'hex')
+      );
+      return decryptedPrivatekey;
     }
     return false;
   }
@@ -171,7 +165,7 @@ export class WalletService {
     cipher.final()]);
     return { encryptedPrivateKey, iv };
   }
-  async decryptPrivateKey(password: string, iv: any, encryptedText: any) {
+  async decryptPrivateKey(password: string, iv: Buffer, encryptedText: any) {
     const key = (await promisify(scrypt)(password, 'salt', 32)) as Buffer;
     const decipher = createDecipheriv('aes-256-ctr', key, iv);
     const decryptedText = Buffer.concat([decipher.update(encryptedText),
@@ -198,64 +192,81 @@ export class WalletService {
   }
 
   async burn(amount: Uint256, privateKey: string) {
+    const sourceWallet = new Wallet(privateKey, this.provider);
+    const sourceAddress = sourceWallet.address;
+    const user = await this.walletRepository.findOne({
+      where: {
+        address: sourceAddress,
+      },
+    });
+    //Get contract value based on token
+    const userToken = this.getTokenContract(user.currentSelectToken);
+    const contractAddress = Object(userToken).contractAddress.address;
+    const contractAbi = Object(userToken).abi;
+    const contract = new Contract(
+      contractAddress,
+      contractAbi,
+      sourceWallet,
+    );
+    return await this.executeBurn(contract, amount);
+  }
+  //Execute burning token from source wallet set in contract
+  async executeBurn(contract: ethers.Contract, amount: Uint256) {
     try {
-      const sourceWallet = new Wallet(privateKey, this.provider);
-      const user = await this.walletRepository.findOne({
-        where: {
-          address: sourceWallet.address,
-        },
-      });
-      const userToken = this.getTokenContract(user.currentSelectToken);
-      const contractAddress = Object(userToken).contractAddress.address;
-      const contractAbi = Object(userToken).abi;
-      const contract = new Contract(
-        contractAddress,
-        contractAbi,
-        sourceWallet,
-      );
       const tx = await contract.burn(this.convertToEther(Number(amount)));
-      await tx.wait();
-      return {
-        status: true,
-        txHash: tx.hash,
-      };
+      return tx.hash;
     } catch (error) {
-      console.log(error);
-      console.log('Not enough gas');
-      return false;
+      if (error.message.includes('insufficient funds for intrinsic transaction cost ')) {
+        console.log('Not enough gas');
+      } else {
+        console.log(error);
+      }
+      return undefined;
     }
   }
   async transfer(toAddress: string, amount: Uint256, privateKey: string) {
     try {
-
+      // Create a new Wallet instance for the source wallet
       const sourceWallet = new Wallet(privateKey, this.provider);
-      const user = await this.walletRepository.findOne({
+
+      // Find the user based on the source wallet's address
+      const wallet = await this.walletRepository.findOne({
         where: {
           address: sourceWallet.address,
         },
       });
-      const userToken = this.getTokenContract(user.currentSelectToken);
-      const contractAddress = Object(userToken).contractAddress.address;
-      const contractAbi = Object(userToken).abi;
-      const contract = new Contract(
-        contractAddress,
-        contractAbi,
-        sourceWallet,
-      );
+      // Check if the user exists
+      if (!wallet) {
+        console.log('wallet not found.');
+        return undefined;
+      }
+      if (toAddress === wallet.address) {
+        return WalletStatus.SELF;
+      }
+      // Get the token contract information
+      const userToken = this.getTokenContract(wallet.currentSelectToken);
+      const contractAddress = userToken.contractAddress.address;
+      const contractAbi = userToken.abi;
+
+      // Create a Contract instance for the token
+      const contract = new Contract(contractAddress, contractAbi, sourceWallet);
+
+      // Perform the token transfer
       const tx = await contract.transfer(
         toAddress,
         this.convertToEther(Number(amount)),
       );
-      tx.nonce++;
-      console.log(tx.hash);
-      return {
-        status: true,
-        transaction: tx,
-      };
+      // Log the transaction hash
+      console.log(tx);
+      return tx.hash;
     } catch (error) {
-      console.log(error);
-      console.log('Not enough gas');
-      return false;
+      if (error.message.includes('insufficient funds for intrinsic transaction cost ')) {
+        console.log('Not enough gas');
+      }
+      else {
+        console.log(error);
+      }
+      return undefined;
     }
   }
   async generateWalletFromPrivateKey(privateKey: string) {
@@ -280,7 +291,6 @@ export class WalletService {
       mnemonic: wallet.mnemonic.phrase
     };
   }
-
   convertToEther(amount: number) {
     return ethers.parseUnits(amount.toString(), 'ether');
   }
@@ -294,44 +304,41 @@ export class WalletService {
       return undefined;
     }
   }
-
-  async sendMoneybyAddress(userId: string, receiverAddress1: string, money: Uint256,) {
-    const receiverAddress = receiverAddress1.toLowerCase();
-    if (!ethers.isAddress(receiverAddress)) {
-      return WalletStatus.INVALID;
-    }
-    const sender = await this.walletRepository.findOne({
-      where: {
-        userId: userId,
-      },
-    });
-
-    const balance = await this.getBalance(sender.address);
-    if (balance < Number(money)) {
-      return WalletStatus.NOT_ENOUGH_FUND;
-    }
-    const privateKey = await this.checkPrivateKeyByID(userId);
-    const checkTransaction = await this.transfer(
-      receiverAddress,
-      money,
-      privateKey,
-    );
-    if (!checkTransaction) {
+  async sendMoneybyAddress(userId: string, receiverAddress: string, money: Uint256): Promise<TransactionStatus | WalletStatus | Object> {
+    try {
+      if (!ethers.isAddress(receiverAddress)) {
+        return WalletStatus.INVALID;
+      }
+      // Check the sender's private key
+      const privateKey = await this.checkPrivateKeyByID(userId);
+      // Transfer money to the receiver
+      const checkTransaction = await this.transfer(receiverAddress, money, privateKey);
+      // Find the sender based on the user ID
+      const sender = await this.walletRepository.findOne({
+        where: {
+          userId: userId,
+        },
+      });
+      // Get the sender's balance
+      const balance = await this.getBalance(sender.address);
+      // Check for different conditions and return the appropriate status
+      if (checkTransaction === WalletStatus.SELF) {
+        return WalletStatus.SELF;
+      }
+      if (balance < Number(money)) {
+        return WalletStatus.NOT_ENOUGH_FUND;
+      }
+      if (!checkTransaction) {
+        return TransactionStatus.FAIL;
+      }
+      return {
+        status: TransactionStatus.SUCCESS,
+        txHash: checkTransaction,
+      };
+    } catch (error) {
+      console.error(error);
       return TransactionStatus.FAIL;
     }
-    if (sender.address == receiverAddress) {
-      return WalletStatus.SELF;
-    }
-    if (balance < Number(money)) {
-      return WalletStatus.NOT_ENOUGH_FUND;
-    }
-    if (!checkTransaction) {
-      return TransactionStatus.FAIL;
-    }
-    return {
-      status: TransactionStatus.SUCCESS,
-      txHash: checkTransaction.transaction.hash,
-    };
   }
   async withdrawn(userId: string, money: number) {
     const user = await this.walletRepository.findOne({
@@ -437,7 +444,6 @@ export class WalletService {
     } else {
       return false
     }
-
   }
   async verifyBackupPhrase(mnemonic: string, address: string) {
     try {

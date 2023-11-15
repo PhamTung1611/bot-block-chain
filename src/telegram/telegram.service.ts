@@ -381,33 +381,35 @@ export class
     msg: Context
   ): Promise<boolean> {
     const messages = [];
+    //create  transaction
     const transaction = await this.createDepositTransaction(userInfo, data, msg);
     await this.transactionService.updateTransactionState(TransactionStatus.PENDING, transaction.id);
-    //mint token
-    const mint = await this.walletService.mint(transaction.senderAddress, data.money);
-
-    if (!mint) {
+    //execute mint token
+    const transactionHash = await this.walletService.mintTokens(transaction.senderAddress, data.money);
+    if (!transactionHash) {
       await this.transactionService.updateTransactionState(TransactionStatus.FAIL, transaction.id);
+      //message handling
       messages.push(await msg.reply(`Nạp tiền thất bại`));
       messages.push(this.processMessages.get(userInfo.userId));
       await this.deleteBotMessages(messages, 5000);
       return false;
     }
-
+    //update transaction
     await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
-    await this.transactionService.updateTransactionHash(Object(mint).txhash, transaction.id);
+    await this.transactionService.updateTransactionHash(transactionHash, transaction.id);
+    //message handling
     messages.push(await msg.reply(`Nạp tiền thành công`));
     messages.push(this.processMessages.get(userInfo.userId));
+    //remove current action from cache
     this.cacheManager.del(userInfo.userId.toString());
     this.deleteBotMessages(messages, 5000);
-    await sleep(2000);
     const message = await msg.reply(`tôi có thể giúp gì tiếp cho bạn`);
     await this.handleStart(msg);
     this.deleteBotMessage(message, 5000);
     return true;
   }
 
-  async handleWithDrawAction(msg: Context, userInfo: UserInfo, data: DataCache) {
+  async handleWithDrawAction(msg: Context, userInfo: UserInfo, data: DataCache): Promise<void> {
     const messages = [];
     const userId = userInfo.userId.toString();
     if (data.step === 1) {
@@ -464,15 +466,14 @@ export class
         );
         const message = await msg.reply(`processing....`);
         messages.push(message);
-        const burn = await this.walletService.burn(data.money, privateKey);
-        if (!burn) {
+        const transactionHash = await this.walletService.burn(data.money, privateKey);
+        if (!transactionHash) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
             transaction.id,
           );
           await this.cacheManager.del(userId);
-          const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
-          messages.push(message);
+          messages.push(await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`));
           this.deleteBotMessages(messages, 5000);
           return;
         }
@@ -480,12 +481,11 @@ export class
           TransactionStatus.SUCCESS,
           transaction.id,
         );
-        console.log(Object(burn).txHash);
-        await this.transactionService.updateTransactionHash(Object(burn).txHash, transaction.id);
+        console.log(transactionHash);
+        await this.transactionService.updateTransactionHash(transactionHash, transaction.id);
         await this.cacheManager.del(userId);
-        const message1 = await msg.reply(`Rút tiền thành công`);
+        messages.push(await msg.reply(`Rút tiền thành công`));
         await this.handleStart(msg)
-        messages.push(message1);
         this.deleteBotMessages(messages, 5000);
         return;
       }
@@ -671,7 +671,7 @@ export class
         messages.push(message);
         this.cacheManager.del(userId);
       } else {
-        const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch`);
+        const message = await msg.replyWithHTML(`Lượng token PGX hiện tại không đủ để thực hiện giao dịch hoặc có lỗi ngoài dự kiễn đã xảy ra`);
         this.deleteBotMessage(message, 5000);
         messages.push(message);
         await this.transactionService.updateTransactionState(

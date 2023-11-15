@@ -9,12 +9,12 @@ export class TransactionService {
   constructor(
     @InjectRepository(TransactionEntity)
     private readonly transactionRepository: Repository<TransactionEntity>,
-  ) {}
+  ) { }
 
   async createTransaction(jsonData: any) {
     const transaction = this.transactionRepository.create(jsonData);
-    const saveTransaction = await this.transactionRepository.save(transaction);
     if (transaction) {
+      const saveTransaction = await this.transactionRepository.save(transaction);
       return Object(saveTransaction);
     } else {
       return undefined;
@@ -52,7 +52,9 @@ export class TransactionService {
     const transaction = await this.transactionRepository.findOneBy({
       id: id,
     });
-
+    if (!transaction) {
+      return undefined;
+    }
     return transaction;
   }
   async getListHistory(address: string) {

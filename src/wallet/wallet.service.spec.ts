@@ -6,7 +6,6 @@ import { WalletEntity } from './wallet.entity';
 import { ConfigService } from '@nestjs/config';
 import { WalletStatus } from './enum/wallet.status.enum';
 import { ethers } from 'ethers';
-
 jest.mock('ethers', () => ({
   ...jest.requireActual('ethers'),
   Wallet: jest.fn(),

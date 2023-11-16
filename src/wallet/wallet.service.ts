@@ -13,7 +13,9 @@ import { Mentos } from '../constants/abis/mentos.abi';
 import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
 import * as bcrypt from 'bcrypt';
-import { WalletNotFoundException } from '../exception/wallet.exception';
+import { TokenService } from '../token/token.service';
+import { GenericAbi } from '../constants/abis/generic.erc20.abi';
+import { TokenStatus } from 'src/token/token.enum';
 interface WalletInfo {
   privateKey: number,
   iv: string,
@@ -31,11 +33,11 @@ export class WalletService {
   private contractAddress: any;
   private abi: any;
   private readonly adminWallet: any;
-  private tokens: Map<string, any> = new Map();
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,
     private configService: ConfigService,
+    private tokenService: TokenService,
   ) {
     this.provider = new ethers.JsonRpcProvider(configService.get('RPC'));
     this.contractAddress = HUSDContractAddress;
@@ -58,7 +60,7 @@ export class WalletService {
   identify<Type>(arg: Type): Type {
     return arg;
   }
-  getTokenContract(token: string) {
+  async getTokenContract(token: string) {
     switch (token) {
       case 'HUSD':
         return {
@@ -70,8 +72,22 @@ export class WalletService {
           contractAddress: MentosContractAddress,
           abi: Mentos,
         }
+      //get token by name and use generic abi  which doesnt support minting and burning 
       default:
-        break;
+        console.log(`get Generic Contract for ${token}`)
+        return await this.getGenericContract(token);
+    }
+
+  }
+  async getGenericContract(tokenSymbol: string) {
+    const token = await this.tokenService.getContractByName(tokenSymbol);
+    return {
+      contractAddress: {
+        token: token?.symbol,
+        address: token?.contractAddress,
+        description: `${token?.name} ${token?.symbol}`
+      },
+      abi: GenericAbi
     }
   }
   async createWallet(walletInfo: any, address: string) {
@@ -85,7 +101,10 @@ export class WalletService {
       return false;
     }
   }
-
+  async getTokensByUserId(userId: string) {
+    const wallet = await this.walletRepository.findOne({ where: { userId: userId } });
+    return wallet.tokens;
+  }
   async sendToken(toAddress: string) {
     try {
       const signer = await this.adminWallet;
@@ -103,10 +122,12 @@ export class WalletService {
         address: address,
       },
     });
-    const userToken = this.getTokenContract(user.currentSelectToken);
+    const userToken = await this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
-
+    if (contractAbi === GenericAbi) {
+      return TokenStatus.NOT_SUPPORT;
+    }
     const sourceWallet = new Wallet(this.configService.get('adminPrivateKey'), this.provider);
     const contract = new ethers.Contract(contractAddress, contractAbi, sourceWallet);
     return await this.executeMint(contract, user.address, amount);
@@ -179,7 +200,7 @@ export class WalletService {
         address: address,
       },
     });
-    const userToken = this.getTokenContract(user.currentSelectToken);
+    const userToken = await this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
     const contract = new ethers.Contract(
@@ -191,6 +212,7 @@ export class WalletService {
     return Number(ethers.formatEther(balance));
   }
 
+
   async burn(amount: Uint256, privateKey: string) {
     const sourceWallet = new Wallet(privateKey, this.provider);
     const sourceAddress = sourceWallet.address;
@@ -200,9 +222,12 @@ export class WalletService {
       },
     });
     //Get contract value based on token
-    const userToken = this.getTokenContract(user.currentSelectToken);
+    const userToken = await this.getTokenContract(user.currentSelectToken);
     const contractAddress = Object(userToken).contractAddress.address;
     const contractAbi = Object(userToken).abi;
+    if (contractAbi === GenericAbi) {
+      return TokenStatus.NOT_SUPPORT;
+    }
     const contract = new Contract(
       contractAddress,
       contractAbi,
@@ -244,7 +269,7 @@ export class WalletService {
         return WalletStatus.SELF;
       }
       // Get the token contract information
-      const userToken = this.getTokenContract(wallet.currentSelectToken);
+      const userToken = await this.getTokenContract(wallet.currentSelectToken);
       const contractAddress = userToken.contractAddress.address;
       const contractAbi = userToken.abi;
 
@@ -258,6 +283,7 @@ export class WalletService {
       );
       // Log the transaction hash
       console.log(tx.hash);
+
       return tx.hash;
     } catch (error) {
       if (error.message.includes('insufficient funds for intrinsic transaction cost ')) {

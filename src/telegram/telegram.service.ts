@@ -22,6 +22,8 @@ import { Update, User } from 'telegraf/typings/core/types/typegram';
 import { Any } from 'typeorm';
 import { WalletEntity } from '../wallet/wallet.entity';
 import { Wallet } from 'ethers';
+import { TokenService } from 'src/token/token.service';
+import { TokenStatus } from 'src/token/token.enum';
 
 interface DataCache {
   action: string;
@@ -70,7 +72,6 @@ export class
   private tokens = Markup.inlineKeyboard([
     [Markup.button.callback('HUSD', Button.HUSD),
     Markup.button.callback('MTK', Button.MTK)],
-
   ]);
   private deleteButton = Markup.inlineKeyboard([
     [Markup.button.callback('Delete Message', Button.DELETE)],
@@ -83,9 +84,11 @@ export class
     [Markup.button.callback('Forgot Password', Button.FORGOT_PASSWORD)],
   ])
   constructor(
+
     private transactionService: TransactionService,
     private walletService: WalletService,
     private configService: ConfigService,
+    private tokenService: TokenService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
     this.bot.use(session({ defaultSession: () => ({ count: 0 }) }));
@@ -184,7 +187,21 @@ export class
       await this.deleteBotMessage(message, 5000);
       return;
     }
-    const tokenMenu = await msg.reply(`Current using ${user.currentSelectToken} token`, this.tokens);
+    //load token 
+    const tokens = await this.walletService.getTokensByUserId(user.userId);
+    const tokensArrayButton = [Markup.button.callback('HUSD', Button.HUSD),
+    Markup.button.callback('MTK', Button.MTK)]
+    tokens.forEach(token => {
+      tokensArrayButton.push(Markup.button.callback(token.symbol, token.symbol))
+    });
+    //need to add dynamic changing based on import token by user
+    const tokenMenu = await msg.reply(`Current using ${user.currentSelectToken} token`, Markup.inlineKeyboard(
+      [
+        tokensArrayButton,
+        [Markup.button.callback('Add Token', Button.ADD_TOKEN),
+        Markup.button.callback('Delete Token', Button.DELETE_TOKEN)]
+      ]
+    ));
     const tokenInstances = this.tokenInstances.get(userInfo.userId) || [];
     tokenInstances.push(tokenMenu);
     if (tokenInstances.length > 1) {
@@ -208,6 +225,7 @@ export class
       this.deleteBotMessage(message, 5000);
       return;
     }
+    const allToken = await this.tokenService.getAllTokens();
     switch (data.action) {
       case Action.DEPOSIT:
         await this.handleDepositAction(msg, userInfo, data);
@@ -239,13 +257,26 @@ export class
       case Action.FORGOT_PASSWORD:
         await this.handleForgotPasswordAction(msg, userInfo, data);
         break;
+      case Action.ADD_TOKEN:
+        await this.handleAddTokenAction(msg, userInfo, data);
+        break;
+      case Action.DELETE_TOKEN:
+        await this.handleDeleteTokenAction(msg, userInfo, data);
+        break;
       default:
+        allToken.forEach(async token => {
+          if (token.symbol === userInfo.text) {
+            await msg.reply('Success Action');
+            return;
+          }
+        });
         this.cacheManager.del(userInfo.userId.toString());
         const message = await msg.reply('Xin lỗi, tôi không hiểu', this.keyboardMarkup);
         this.deleteBotMessage(message, 5000);
         break;
     }
   }
+
 
 
   async handleButton(msg: Context) {
@@ -259,6 +290,7 @@ export class
       step: 1,
       money: '',
     };
+    const allToken = await this.tokenService.getAllTokens();
     const checkUser = await this.walletService.findOneUser(userInfo.userId.toString());
     switch (userInfo.text) {
       case Button.CREATE:
@@ -303,18 +335,33 @@ export class
       case Button.FORGOT_PASSWORD:
         await this.handleForgotPasswordButton(msg, data, userInfo, checkUser);
         break;
+      case Button.ADD_TOKEN:
+        await this.handleAddTokenButton(msg, data, userInfo, checkUser)
+        break;
+      case Button.DELETE_TOKEN:
+        await this.handleDeleteTokenButton(msg, data, userInfo, checkUser)
+        break;
       default:
+        for (let token of allToken) {
+          if (token.symbol === userInfo.text) {
+            await this.handleChangingToken(token.symbol, msg, userInfo);
+            await msg.reply('Success Button');
+            return;
+          }
+        }
         await this.cacheManager.del(userInfo.userId.toString());
         const messages = [];
         messages.push(await msg.reply(`Xin lỗi tôi không hiểu`));
         messages.push(await msg.reply(
           'Tôi chỉ thực hiện được như bên dưới thôi!',
         ));
-        await this.handleButton(msg)
-        await this.deleteBotMessages(messages, 5000);
+        // Log an error message or handle undefined button case differently
+        console.error(`Undefined button: ${userInfo.text}`);
         break;
     }
   }
+
+
 
   //Action Handler
   async handleDepositAction(
@@ -394,6 +441,12 @@ export class
       await this.deleteBotMessages(messages, 5000);
       return false;
     }
+    if (transactionHash === TokenStatus.NOT_SUPPORT) {
+      messages.push(await msg.reply(`Token hiện tại không support mint! Vui lòng thực hiện hành động khác`));
+      this.cacheManager.del(userInfo.userId.toString());
+      await this.handleStart(msg);
+      return false;
+    }
     //update transaction
     await this.transactionService.updateTransactionState(TransactionStatus.SUCCESS, transaction.id);
     await this.transactionService.updateTransactionHash(transactionHash, transaction.id);
@@ -467,6 +520,12 @@ export class
         const message = await msg.reply(`processing....`);
         messages.push(message);
         const transactionHash = await this.walletService.burn(data.money, privateKey);
+        if (transactionHash === TokenStatus.NOT_SUPPORT) {
+          messages.push(await msg.reply(`Token hiện tại không support burn! Vui lòng thực hiện hành động khác`));
+          this.cacheManager.del(userInfo.userId.toString());
+          await this.handleStart(msg);
+          return;
+        }
         if (!transactionHash) {
           await this.transactionService.updateTransactionState(
             TransactionStatus.FAIL,
@@ -706,6 +765,27 @@ export class
       this.cacheManager.del(userId);
     }
   }
+  async handleAddTokenAction(msg: any, userInfo: UserInfo, data: DataCache) {
+    const checkAdress = await this.walletService.checkAddressContract(userInfo.text);
+    if (!checkAdress) {
+      await msg.reply(`Invalid address contract`);
+    }
+    const newToken = await this.tokenService.handleNewToken(userInfo.text, userInfo.userId.toString());
+    if (newToken) {
+      await msg.reply(`${newToken} added to your list token!`)
+    }
+    this.cacheManager.del(userInfo.userId.toString());
+  }
+  async handleDeleteTokenAction(msg: Context, userInfo: UserInfo, data: DataCache) {
+    const token = userInfo.text;
+    const deleteToken = await this.tokenService.removeTokenFromList(token, userInfo.userId.toString());
+    if (deleteToken) {
+      await msg.reply('Delete Token Successfully');
+      this.cacheManager.del(userInfo.userId.toString());
+      return;
+    }
+    await msg.reply('Delete Token fail!!');
+  }
   //Button Handler
   async setCache(userInfo: UserInfo, action: Action, step: number) {
     await this.cacheManager.set(
@@ -717,7 +797,20 @@ export class
       60000,
     );
   }
-
+  async handleAddTokenButton(msg: Context, data: DataCache, userInfo: UserInfo, checkUser: WalletEntity) {
+    if (!checkUser) {
+      return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+    }
+    if (data.action === '') {
+      this.setCache(userInfo, Action.ADD_TOKEN, 1);
+      await msg.reply('Vui lòng nhập token Contract Address');
+    }
+    else {
+      await this.cacheManager.del(userInfo.userId.toString());
+      this.setCache(userInfo, Action.ADD_TOKEN, 1);
+      await msg.reply('Vui lòng nhập token Contract Address');
+    }
+  }
   async handleImportAccountButton(msg: Context, data: DataCache, userInfo: UserInfo) {
     this.setCache(userInfo, Action.IMPORT, 1);
     const finalMessage = await msg.replyWithHTML(`Vui lòng nhập privateKey của ví bạn muốn import`);
@@ -871,6 +964,17 @@ export class
       this.deleteBotMessage(message, 10000)
     }
   }
+  async handleDeleteTokenButton(msg: Context, data: DataCache, userInfo: UserInfo, checkUser: WalletEntity) {
+    if (!checkUser) {
+      return await msg.reply(`Vui lòng gõ '/start' để bắt đầu`);
+    }
+    if (data.action === '') {
+      this.setCache(userInfo, Action.DELETE_TOKEN, 1);
+      const finalMessage = await msg.reply('Hãy nhập vào token symbol cần xóa:');
+      this.deleteBotMessage(finalMessage, 10000)
+    }
+  }
+
   async handleDepositButton(
     msg: Context,
     userInfo: UserInfo,

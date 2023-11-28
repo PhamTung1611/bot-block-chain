@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './enum/wallet.status.enum';
-import { Contract, ethers, Wallet } from 'ethers';
+import { Contract, ethers, keccak256, Log, toUtf8Bytes, TransactionReceipt, Wallet } from 'ethers';
 import Web3, { Uint256 } from 'web3';
 import { TransactionStatus } from '../transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
@@ -33,6 +33,7 @@ export class WalletService {
   private contractAddress: any;
   private abi: any;
   private readonly adminWallet: any;
+  private txReceipts: any[];
   constructor(
     @InjectRepository(WalletEntity)
     private readonly walletRepository: Repository<WalletEntity>,

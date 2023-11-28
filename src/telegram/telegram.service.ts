@@ -768,11 +768,14 @@ export class
   async handleAddTokenAction(msg: any, userInfo: UserInfo, data: DataCache) {
     const checkAdress = await this.walletService.checkAddressContract(userInfo.text);
     if (!checkAdress) {
-      await msg.reply(`Invalid address contract`);
+      const message = await msg.reply(`Invalid address contract`);
+      this.deleteBotMessage(message, 3000);
     }
     const newToken = await this.tokenService.handleNewToken(userInfo.text, userInfo.userId.toString());
     if (newToken) {
-      await msg.reply(`${newToken} added to your list token!`)
+      const message = await msg.reply(`${newToken} added to your list token!`)
+      this.deleteBotMessage(message, 3000);
+      await this.handleToken(msg, userInfo, data);
     }
     this.cacheManager.del(userInfo.userId.toString());
   }
@@ -780,12 +783,17 @@ export class
     const token = userInfo.text;
     const deleteToken = await this.tokenService.removeTokenFromList(token, userInfo.userId.toString());
     if (deleteToken) {
-      await msg.reply('Delete Token Successfully');
+      const message = await msg.reply('Delete Token Successfully');
+      this.deleteBotMessage(message,3000);
+      await this.handleToken(msg, userInfo, data);
       this.cacheManager.del(userInfo.userId.toString());
       return;
     }
-    await msg.reply('Delete Token fail!!');
+    const message = await msg.reply('Delete Token fail!!');
+    this.deleteBotMessage(message,3000);
+    await this.handleToken(msg, userInfo, data);
   }
+
   //Button Handler
   async setCache(userInfo: UserInfo, action: Action, step: number) {
     await this.cacheManager.set(
@@ -970,7 +978,7 @@ export class
     }
     if (data.action === '') {
       this.setCache(userInfo, Action.DELETE_TOKEN, 1);
-      const finalMessage = await msg.reply('Hãy nhập vào token symbol cần xóa:');
+      const finalMessage = await msg.reply('Hãy nhập vào token contract address cần xóa:');
       this.deleteBotMessage(finalMessage, 10000)
     }
   }

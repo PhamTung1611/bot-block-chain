@@ -27,19 +27,24 @@ export class TokenService {
     async getAllTokens() {
         return await this.tokenRepository.find();
     }
-    async getContractByName(token: string) {
-        const tokenFound = await this.tokenRepository.findOne({ where: { symbol: token } })
+    async getContractByName(symbol: string) {
+        const tokenFound = await this.tokenRepository.findOne({ where: { symbol: symbol } })
+        return tokenFound;
+    }
+    async getContractByAddress(address: string) {
+        const tokenFound = await this.tokenRepository.findOne({ where: { contractAddress: address } })
         return tokenFound;
     }
     async handleNewToken(tokenContractAddress: string, userId: string) {
-        const checkExistToken = await this.tokenRepository.findOne({ where: { contractAddress: tokenContractAddress } }); 
+        const checkExistToken = await this.tokenRepository.findOne({ where: { contractAddress: tokenContractAddress } });
         const wallet = await this.walletRepository.findOne({ where: { userId: userId } });
         if (checkExistToken) {
-            if (!checkExistToken.wallets?.includes(wallet)) {
-                checkExistToken.wallets.push(wallet);
-                return await this.tokenRepository.save(checkExistToken);
+            if (!wallet.tokens?.includes(checkExistToken)) {
+                wallet.tokens.push(checkExistToken);
+                await this.walletRepository.save(wallet);
+                return checkExistToken.symbol;
             }
-            return false;;
+            return false;
         }
 
         const contractAbi = GenericAbi;
@@ -65,19 +70,21 @@ export class TokenService {
         return true;
 
     }
-    arrayRemove(arr, value) {
-
-        return arr.filter(function (ele) {
-            return ele != value;
+    async removeFromList(array: any[], value: any) {
+        array.forEach((item, index) => {
+            if (item === value) array.splice(index, 1);
         });
     }
 
     async removeTokenFromList(token: string, userId: string) {
         const foundWallet = await this.walletRepository.findOne({ where: { userId: userId } });
-        const tokens = foundWallet.tokens;
-        const foundToken = await this.getContractByName(token);
-        foundWallet.tokens = this.arrayRemove(tokens, foundToken);
-        return await this.walletRepository.save(foundWallet);
-    }
+        const tokenIndex = foundWallet.tokens.findIndex(item => item.contractAddress === token);
 
+        if (tokenIndex !== -1) {
+            foundWallet.tokens.splice(tokenIndex, 1);
+            return await this.walletRepository.save(foundWallet);
+        } else {
+            return undefined;
+        }
+    }
 }

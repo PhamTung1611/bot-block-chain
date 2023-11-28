@@ -3,12 +3,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletEntity } from './wallet.entity';
 import { WalletStatus } from './enum/wallet.status.enum';
-import { Contract, ethers, keccak256, Log, toUtf8Bytes, TransactionReceipt, Wallet } from 'ethers';
+import {
+  Contract,
+  ethers,
+  keccak256,
+  Log,
+  toUtf8Bytes,
+  TransactionReceipt,
+  Wallet,
+} from 'ethers';
 import Web3, { Uint256 } from 'web3';
 import { TransactionStatus } from '../transaction/enum/transaction.enum';
 import { ConfigService } from '@nestjs/config';
 import { HUSD } from '../constants/abis/husd.abi';
-import { HUSDContractAddress, MentosContractAddress } from '../constants/contractAdress/contract.address';
+import {
+  HUSDContractAddress,
+  MentosContractAddress,
+} from '../constants/contractAdress/contract.address';
 import { Mentos } from '../constants/abis/mentos.abi';
 import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
@@ -17,14 +28,14 @@ import { TokenService } from '../token/token.service';
 import { GenericAbi } from '../constants/abis/generic.erc20.abi';
 import { TokenStatus } from 'src/token/token.enum';
 interface WalletInfo {
-  privateKey: number,
-  iv: string,
-  address: string,
-  currentSelectToken: string,
-  mnemonic: string,
-  userId: string,
-  username: string,
-  password: string
+  privateKey: number;
+  iv: string;
+  address: string;
+  currentSelectToken: string;
+  mnemonic: string;
+  userId: string;
+  username: string;
+  password: string;
 }
 
 @Injectable()
@@ -67,18 +78,17 @@ export class WalletService {
         return {
           contractAddress: HUSDContractAddress,
           abi: HUSD,
-        }
+        };
       case 'MTK':
         return {
           contractAddress: MentosContractAddress,
           abi: Mentos,
-        }
-      //get token by name and use generic abi  which doesnt support minting and burning 
+        };
+      //get token by name and use generic abi  which doesnt support minting and burning
       default:
-        console.log(`get Generic Contract for ${token}`)
+        console.log(`get Generic Contract for ${token}`);
         return await this.getGenericContract(token);
     }
-
   }
   async getGenericContract(tokenSymbol: string) {
     const token = await this.tokenService.getContractByName(tokenSymbol);
@@ -86,10 +96,10 @@ export class WalletService {
       contractAddress: {
         token: token?.symbol,
         address: token?.contractAddress,
-        description: `${token?.name} ${token?.symbol}`
+        description: `${token?.name} ${token?.symbol}`,
       },
-      abi: GenericAbi
-    }
+      abi: GenericAbi,
+    };
   }
   async createWallet(walletInfo: any, address: string) {
     await this.sendToken(address);
@@ -103,7 +113,9 @@ export class WalletService {
     }
   }
   async getTokensByUserId(userId: string) {
-    const wallet = await this.walletRepository.findOne({ where: { userId: userId } });
+    const wallet = await this.walletRepository.findOne({
+      where: { userId: userId },
+    });
     return wallet.tokens;
   }
   async sendToken(toAddress: string) {
@@ -117,7 +129,10 @@ export class WalletService {
       return;
     }
   }
-  async mintTokens(address: string, amount: Uint256): Promise<string | undefined> {
+  async mintTokens(
+    address: string,
+    amount: Uint256,
+  ): Promise<string | undefined> {
     const user = await this.walletRepository.findOne({
       where: {
         address: address,
@@ -129,29 +144,46 @@ export class WalletService {
     if (contractAbi === GenericAbi) {
       return TokenStatus.NOT_SUPPORT;
     }
-    const sourceWallet = new Wallet(this.configService.get('adminPrivateKey'), this.provider);
-    const contract = new ethers.Contract(contractAddress, contractAbi, sourceWallet);
+    const sourceWallet = new Wallet(
+      this.configService.get('adminPrivateKey'),
+      this.provider,
+    );
+    const contract = new ethers.Contract(
+      contractAddress,
+      contractAbi,
+      sourceWallet,
+    );
     return await this.executeMint(contract, user.address, amount);
   }
 
-  async executeMint(contract: ethers.Contract, address: string, amount: Uint256): Promise<string | undefined> {
-    const txResponse = await contract.mint(address, this.convertToEther(Number(amount)))
+  async executeMint(
+    contract: ethers.Contract,
+    address: string,
+    amount: Uint256,
+  ): Promise<string | undefined> {
+    const txResponse = await contract.mint(
+      address,
+      this.convertToEther(Number(amount)),
+    );
     if (!txResponse) {
       return undefined;
     }
-    return txResponse.hash
+    return txResponse.hash;
   }
   async checkTransactionFee(estimateGas: number) {
     console.log(this.identify(estimateGas));
     const gasprice = Number((await this.provider.getFeeData()).gasPrice);
-    const piority = Number(((await this.provider.getFeeData()).maxPriorityFeePerGas));
-    const transactionFee = ethers.formatUnits((gasprice + piority) * estimateGas);
+    const piority = Number(
+      (await this.provider.getFeeData()).maxPriorityFeePerGas,
+    );
+    const transactionFee = ethers.formatUnits(
+      (gasprice + piority) * estimateGas,
+    );
     console.log('transaction fee:' + transactionFee);
     return transactionFee;
   }
   async getUserNativeToken(address: string) {
-
-    return ethers.formatUnits(await this.provider.getBalance(address))
+    return ethers.formatUnits(await this.provider.getBalance(address));
   }
   async addAuthorizedOwner(newOwner: string) {
     const adminWallet = this.adminWallet;
@@ -168,13 +200,13 @@ export class WalletService {
     if (wallet) {
       const decryptedPrivatekey = await this.decryptPrivateKey(
         this.configService.get('encryption_pass'),
-        Buffer.from(wallet.iv, 'hex'), Buffer.from(wallet.privateKey, 'hex')
+        Buffer.from(wallet.iv, 'hex'),
+        Buffer.from(wallet.privateKey, 'hex'),
       );
       return decryptedPrivatekey;
     }
     return false;
   }
-
 
   async encryptPrivateKey(privateKey: string) {
     const iv = randomBytes(16);
@@ -183,16 +215,19 @@ export class WalletService {
     const cipher = createCipheriv('aes-256-ctr', key, iv);
 
     const textToEncrypt = privateKey;
-    const encryptedPrivateKey = Buffer.concat([cipher.update(textToEncrypt),
-    cipher.final()]);
+    const encryptedPrivateKey = Buffer.concat([
+      cipher.update(textToEncrypt),
+      cipher.final(),
+    ]);
     return { encryptedPrivateKey, iv };
   }
   async decryptPrivateKey(password: string, iv: Buffer, encryptedText: any) {
     const key = (await promisify(scrypt)(password, 'salt', 32)) as Buffer;
     const decipher = createDecipheriv('aes-256-ctr', key, iv);
-    const decryptedText = Buffer.concat([decipher.update(encryptedText),
-    decipher.final()]
-    )
+    const decryptedText = Buffer.concat([
+      decipher.update(encryptedText),
+      decipher.final(),
+    ]);
     return decryptedText.toString();
   }
   async getBalance(address: string) {
@@ -213,7 +248,6 @@ export class WalletService {
     return Number(ethers.formatEther(balance));
   }
 
-
   async burn(amount: Uint256, privateKey: string) {
     const sourceWallet = new Wallet(privateKey, this.provider);
     const sourceAddress = sourceWallet.address;
@@ -229,11 +263,7 @@ export class WalletService {
     if (contractAbi === GenericAbi) {
       return TokenStatus.NOT_SUPPORT;
     }
-    const contract = new Contract(
-      contractAddress,
-      contractAbi,
-      sourceWallet,
-    );
+    const contract = new Contract(contractAddress, contractAbi, sourceWallet);
     return await this.executeBurn(contract, amount);
   }
   //Execute burning token from source wallet set in contract
@@ -242,7 +272,11 @@ export class WalletService {
       const tx = await contract.burn(this.convertToEther(Number(amount)));
       return tx.hash;
     } catch (error) {
-      if (error.message.includes('insufficient funds for intrinsic transaction cost ')) {
+      if (
+        error.message.includes(
+          'insufficient funds for intrinsic transaction cost ',
+        )
+      ) {
         console.log('Not enough gas');
       } else {
         console.log(error);
@@ -287,10 +321,13 @@ export class WalletService {
 
       return tx.hash;
     } catch (error) {
-      if (error.message.includes('insufficient funds for intrinsic transaction cost ')) {
+      if (
+        error.message.includes(
+          'insufficient funds for intrinsic transaction cost ',
+        )
+      ) {
         console.log('Not enough gas');
-      }
-      else {
+      } else {
         console.log(error);
       }
       return undefined;
@@ -315,7 +352,7 @@ export class WalletService {
       iv: encryptedPrivateKey.iv.toString('hex'),
       address: wallet.address,
       currentSelectToken: HUSDContractAddress.token,
-      mnemonic: wallet.mnemonic.phrase
+      mnemonic: wallet.mnemonic.phrase,
     };
   }
   convertToEther(amount: number) {
@@ -331,7 +368,11 @@ export class WalletService {
       return undefined;
     }
   }
-  async sendMoneybyAddress(userId: string, receiverAddress: string, money: Uint256): Promise<TransactionStatus | WalletStatus | Object> {
+  async sendMoneybyAddress(
+    userId: string,
+    receiverAddress: string,
+    money: Uint256,
+  ): Promise<TransactionStatus | WalletStatus | Object> {
     try {
       if (!ethers.isAddress(receiverAddress)) {
         return WalletStatus.INVALID;
@@ -339,7 +380,11 @@ export class WalletService {
       // Check the sender's private key
       const privateKey = await this.checkPrivateKeyByID(userId);
       // Transfer money to the receiver
-      const checkTransaction = await this.transfer(receiverAddress, money, privateKey);
+      const checkTransaction = await this.transfer(
+        receiverAddress,
+        money,
+        privateKey,
+      );
       // Find the sender based on the user ID
       const sender = await this.walletRepository.findOne({
         where: {
@@ -434,7 +479,11 @@ export class WalletService {
     if (!checkUser) {
       return undefined;
     }
-    const privateKey = await this.decryptPrivateKey(this.configService.get('encryption_pass'), Buffer.from(checkUser.iv, 'hex'), Buffer.from(checkUser.privateKey, 'hex'))
+    const privateKey = await this.decryptPrivateKey(
+      this.configService.get('encryption_pass'),
+      Buffer.from(checkUser.iv, 'hex'),
+      Buffer.from(checkUser.privateKey, 'hex'),
+    );
     return privateKey;
   }
   async checkAddressContract(addressToCheck: string) {
@@ -464,24 +513,24 @@ export class WalletService {
       user.address = addressNew;
       const saveUser = await this.walletRepository.save(user);
       if (!saveUser) {
-        return false
+        return false;
       } else {
-        return true
+        return true;
       }
     } else {
-      return false
+      return false;
     }
   }
   async verifyBackupPhrase(mnemonic: string, address: string) {
     try {
       const wallet = Wallet.fromPhrase(mnemonic);
       if (wallet.address === address) {
-        console.log('address matched')
+        console.log('address matched');
         return true;
       }
       return false;
     } catch (err) {
-      console.log('wrong mnemic format')
+      console.log('wrong mnemic format');
       return false;
     }
   }
@@ -507,7 +556,7 @@ export class WalletService {
     if (saveWallet) {
       return true;
     } else {
-      console.log('something wrong')
+      console.log('something wrong');
       return false;
     }
   }
